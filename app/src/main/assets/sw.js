@@ -1,4 +1,4 @@
-const CACHE_NAME = 'arogya-opd-v2';
+const CACHE_NAME = 'arogya-opd-v3';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

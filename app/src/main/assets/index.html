@@ -150,7 +150,7 @@
       #rx-footer-signature-block { margin-top:20px; padding-top:16px; }
       #rx-print-sheet .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top:18px; }
     }
-.patient-matches:empty{display:none}.patient-matches{padding:12px;margin-bottom:16px;border:1px solid #cbd5e1;border-radius:12px;background:white}.patient-choice{display:inline-block;padding:8px 12px;margin:6px 6px 0 0;border:1px solid #cbd5e1;border-radius:8px;background:#eff6ff;color:#1d4ed8;font:inherit;font-size:12px}.history-card{padding:16px;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:12px;overflow-wrap:anywhere}.history-card p{font-size:12px;margin-top:5px}  </style>
+.patient-matches:empty{display:none}.patient-matches{padding:12px;margin-bottom:16px;border:1px solid #cbd5e1;border-radius:12px;background:white}.patient-choice{display:inline-block;padding:8px 12px;margin:6px 6px 0 0;border:1px solid #cbd5e1;border-radius:8px;background:#eff6ff;color:#1d4ed8;font:inherit;font-size:12px}.history-card{padding:16px;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:12px;overflow-wrap:anywhere}.history-card p{font-size:12px;margin-top:5px}.beta-notice{max-width:1280px;width:calc(100% - 24px);margin:12px auto 0;padding:10px 14px;border:1px solid #dbe3ee;border-radius:10px;background:#f1f5f9;color:#475569;font-size:12px;line-height:1.6}.beta-notice a{color:#1d4ed8;text-decoration:underline}  </style>
 </head>
 <body class="min-h-screen flex flex-col bg-slate-50 text-slate-800">
 
@@ -191,6 +191,7 @@
     </div>
   </header>
 
+  <aside class="beta-notice no-print" role="note"><strong>Early beta</strong> · For clinician evaluation. Review every medicine and dose. Records stay in this browser; backups are unencrypted. <a href="https://github.com/AK43210/arogya-opd/issues" target="_blank" rel="noopener noreferrer">Report a bug</a> without patient information.</aside>
   <!-- Main Application Wrapper -->
   <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 no-print">
     
@@ -324,15 +325,7 @@
               </div>
             </div>
                       <!-- Pediatric Dosing Helper (Triggered when Age < 12) -->
-            <div id="pediatric-banner" class="hidden sm:col-span-12 p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs flex items-center justify-between gap-3 text-indigo-900">
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded-full bg-indigo-200 text-indigo-800 font-bold text-[10px]">👶 Pediatric Case (&lt;12 Yrs)</span>
-                <span id="pediatric-dose-text" class="font-medium">Paracetamol standard dose: 15 mg/kg per dose. Enter patient weight above to calculate exact syrup volume.</span>
-              </div>
-              <button type="button" onclick="loadPediatricFormulary()" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition shrink-0">
-                View Pediatric Syrups
-              </button>
-            </div>
+
           </div>
         </div>
 
@@ -2350,6 +2343,8 @@ Do you want to override and add anyway?`);
         showToast('PDF library unavailable. Use Print and choose Save as PDF.', 'error');
         return;
       }
+      if (window.pdfExportBusy) return;
+      window.pdfExportBusy = true;
       const frame=document.createElement('iframe');
       frame.style.cssText='position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0';
       document.body.appendChild(frame);
@@ -2357,21 +2352,36 @@ Do you want to override and add anyway?`);
         showToast('Preparing PDF…','info');
         await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=html;});
         await frame.contentDocument.fonts.ready;
+        // Run the renderer inside this document. Cross-document rendering uses the
+        // application's scroll coordinates and can crop the exported prescription.
+        const library = frame.contentDocument.createElement('script');
+        library.src = new URL('vendor/html2pdf-0.10.1.min.js', document.baseURI).href;
+        await new Promise((resolve,reject) => {
+          library.onload=resolve; library.onerror=()=>reject(new Error('PDF library failed to load'));
+          frame.contentDocument.head.appendChild(library);
+        });
+        frame.contentWindow.scrollTo(0,0);
         const scopedStyle = frame.contentDocument.createElement('style');
         scopedStyle.textContent = frame.contentDocument.querySelector('style').textContent;
         const sheet = frame.contentDocument.getElementById('pdf-document');
         sheet.prepend(scopedStyle);
-        const worker = html2pdf().set({margin:14,filename:prescriptionFilename(),image:{type:'jpeg',quality:.98},html2canvas:{scale:2,windowWidth:794,scrollX:0,scrollY:0},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}}).from(sheet);
+        const worker = frame.contentWindow.html2pdf().set({margin:14,filename:prescriptionFilename(),image:{type:'jpeg',quality:.98},html2canvas:{scale:2,windowWidth:794,scrollX:0,scrollY:0},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}}).from(sheet);
         if (window.AndroidNative && typeof AndroidNative.savePrescriptionPdf === 'function') {
           const data = await worker.outputPdf('datauristring');
           AndroidNative.savePrescriptionPdf(data,prescriptionFilename());
         } else {
-          await worker.save();
+          const blob = await worker.outputPdf('blob');
+          const url = URL.createObjectURL(blob);
+          const download = document.createElement('a');
+          download.href=url; download.download=prescriptionFilename();
+          document.body.appendChild(download); download.click(); download.remove();
+          setTimeout(()=>URL.revokeObjectURL(url),60000);
           showToast('PDF created. Check your downloads.','success');
         }
       } catch(error) {
+        console.error('PDF export failed:', error.message);
         showToast('PDF could not be created. Use Print and choose Save as PDF.','error');
-      } finally {frame.remove();}
+      } finally {frame.remove();window.pdfExportBusy=false;}
     }
 
     // --- 13. WHATSAPP DIRECT DISPATCH ---
@@ -2677,37 +2687,6 @@ Do you want to override and add anyway?`);
     }
     function closeShortcutsModal() {
       document.getElementById('shortcuts-modal').classList.add('hidden');
-    }
-
-    // --- PEDIATRIC DOSING HELPER ---
-    document.getElementById('patient-age').addEventListener('input', checkPediatricAge);
-    document.getElementById('vitals-weight').addEventListener('input', checkPediatricAge);
-
-    function checkPediatricAge() {
-      const age = parseFloat(document.getElementById('patient-age').value);
-      const wt = parseFloat(document.getElementById('vitals-weight').value);
-      const banner = document.getElementById('pediatric-banner');
-      const text = document.getElementById('pediatric-dose-text');
-
-      if (!isNaN(age) && age < 12) {
-        banner.classList.remove('hidden');
-        if (!isNaN(wt) && wt > 0) {
-          const paracetamolMg = Math.round(wt * 15);
-          const syp120ml = (paracetamolMg / 24).toFixed(1); // 120mg/5ml = 24mg/ml
-          const syp250ml = (paracetamolMg / 50).toFixed(1); // 250mg/5ml = 50mg/ml
-          text.innerHTML = `<strong>Weight: ${wt} kg</strong> &bull; Calculated Paracetamol: <strong>${paracetamolMg} mg per dose</strong> (approx. <strong>${syp250ml} ml</strong> of 250mg/5ml syrup, or <strong>${syp120ml} ml</strong> of 120mg/5ml syrup).`;
-        } else {
-          text.innerHTML = 'Paracetamol recommended pediatric dose: <strong>15 mg/kg per dose</strong>. Enter weight above for exact syrup dosage volume.';
-        }
-      } else {
-        banner.classList.add('hidden');
-      }
-    }
-
-    function loadPediatricFormulary() {
-      switchTab('pharmacy');
-      document.getElementById('med-search-input').value = 'syrup';
-      filterMedicines();
     }
 
     // --- PRESCRIPTION SECTION TOGGLES ---

@@ -1,4 +1,4 @@
-# Android Studio guide — Arogya 0.2.0
+# Android Studio guide — Arogya 0.2.1
 
 Clone this repository and open its root folder in Android Studio.
 
@@ -28,3 +28,7 @@ Do not uninstall or clear storage to update: installing a compatible APK over th
 ## Verification — 8 November 2026
 
 The source includes browser checks for mobile layout, generated PDF downloads and patient record integrity. Android emulator PDF saving has been exercised and the saved one-page PDF rendered and visually inspected. Physical-phone acceptance and physical printing remain pending. Local verification artifacts are intentionally excluded from the repository.
+
+## 0.2.1 beta update
+
+PDF rendering now runs inside its own document, independent of the application scroll position. Browser regression checks compare full exports from mobile and desktop scroll positions. The unreviewed paediatric dose calculator has been removed and a visible early-beta notice added.

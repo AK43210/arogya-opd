@@ -2,7 +2,11 @@
 
 OPD consultation and prescription tool.
 
-## Current build: 0.2.0
+**Early beta · [Open Arogya](https://usearogya.com)**
+
+For clinician evaluation. Review every medicine and dose; this is not a validated prescribing or diagnostic system.
+
+## Current build: 0.2.1
 
 - Consultation notes, medicine search and clinician-created templates.
 - Mobile-friendly prescription preview and A4 output.
@@ -21,7 +25,7 @@ The static web app is in `app/src/main/assets`. Serve it from an HTTP server, fo
 python -m http.server 8080 --directory app/src/main/assets
 ```
 
-Open http://localhost:8080. For a hosted installable web app, use HTTPS. Deployment has not been performed.
+Open http://localhost:8080. For a hosted installable web app, use HTTPS. The web version is hosted at https://usearogya.com using Cloudflare Workers static assets.
 
 ## Android
 
@@ -44,3 +48,9 @@ This is a prototype. Device acceptance, clinical content review and broader secu
 ## License
 
 Arogya project code is available under the MIT License. Bundled dependencies retain their own licenses; see THIRD_PARTY_NOTICES.md and third_party/.
+
+## Reporting bugs
+
+Use GitHub Issues for reproducible bugs and feature suggestions. Use fictional records and remove patient names, mobile numbers, addresses, ABHA identifiers and other identifying information from screenshots, PDFs and backups. Never attach a real patient backup to an issue.
+
+For a security issue involving private information, do not post sensitive details in a public issue. See SECURITY.md.
