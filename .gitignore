@@ -1,0 +1,10 @@
+.gradle/
+.idea/
+local.properties
+**/build/
+tools/
+gradle-*-bin.zip*
+*.iml
+
+verification/
+*.apk

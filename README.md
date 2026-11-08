@@ -31,7 +31,7 @@ See ANDROID_STUDIO_GUIDE.md. The application ID remains `in.arogyahealth.ehr`, u
 
 Records remain in this browser or Android WebView's local storage; no patient-record server or cloud sync is implemented. Anyone with access to the unlocked app/browser profile can access these records. Clearing app/browser storage or uninstalling can erase records. Export backups regularly and protect them: JSON and CSV exports are unencrypted.
 
-Legacy mobile-keyed records are migrated to patient IDs. A local pre-migration snapshot is retained in `arogya_before_patient_ids`. Only matching, unchanged prototype demo records and the original fictional clinic profile are removed automatically. Edited patient records are retained. Old backups can be imported after validation; matching IDs require confirmation before replacement.
+Legacy mobile-keyed records are migrated to patient IDs. A local pre-migration snapshot is retained in `arogya_before_patient_ids`. Existing device records and clinic settings are retained; no demo identities are bundled in the migration code. Old backups can be imported after validation; matching IDs require confirmation before replacement.
 
 ## Development checks
 

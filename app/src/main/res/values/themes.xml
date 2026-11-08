@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.ArogyaEHR" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#1D4ED8</item>
+        <item name="colorPrimaryVariant">#1E40AF</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:statusBarColor">#1D4ED8</item>
+    </style>
+</resources>

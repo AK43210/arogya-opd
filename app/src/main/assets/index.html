@@ -1,0 +1,2855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arogya — OPD consultation and prescription tool</title>
+  <!-- Android PWA & Mobile App Support -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1d4ed8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <!-- Tailwind CSS -->
+  <link rel="stylesheet" href="vendor/tailwind.css">
+  <!-- FontAwesome for medical icons -->
+  <link rel="stylesheet" href="vendor/fontawesome-6.4.0.css">
+  <!-- html2pdf for PDF export -->
+  <script src="vendor/html2pdf-0.10.1.min.js"></script>
+
+
+
+  <style>
+
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+
+    h1, h2, h3, h4, .font-display {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    .vernacular-text {
+      font-family: 'Noto Sans Devanagari', 'Noto Sans Tamil', 'Noto Sans Telugu', 'Noto Sans Kannada', 'Noto Sans Bengali', sans-serif;
+    }
+
+    /* Print Specific Styling: Isolates only the prescription sheet */
+    @media print {
+      body * {
+        visibility: hidden;
+      }
+      #rx-print-sheet, #rx-print-sheet * {
+        visibility: visible;
+      }
+      #rx-print-sheet {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 12mm 15mm !important;
+        box-shadow: none !important;
+        border: none !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+
+      /* Pre-printed letterhead mode: hide header and footer during print */
+      body.mode-letterhead #rx-clinic-header {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      body.mode-letterhead #rx-footer-signature-block {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      body.mode-letterhead #rx-letterhead-spacer {
+        display: block !important;
+        visibility: hidden !important;
+      }
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    .badge-timing {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      letter-spacing: 0.5px;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main, header, main div, header div { min-width: 0; }
+    input, select, textarea { max-width: 100%; }
+    button { touch-action: manipulation; }
+    .step-bar { display: flex; flex-direction: column; align-items: stretch; }
+    .step-tabs { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); width:100%; }
+    .step-tabs .tab-btn { justify-content:center; padding:12px 5px; font-size:12px; gap:5px; }
+    .step-tabs .tab-btn i { display:none; }
+    .step-actions { justify-content:flex-end; }
+    #rx-print-sheet { min-height:0; gap:24px; overflow-wrap:anywhere; }
+    #rx-footer-signature-block > div:first-child { display:flex; justify-content:flex-end; }
+    #rx-footer-signature-block .signature-space { display:none; }
+    #rx-footer-signature-block > div:last-child { gap:10px; flex-wrap:wrap; }
+    #rx-preview-followup-date { white-space:normal; }
+    .preview-scroller { overflow-x:auto; }
+    .preview-scroller #rx-print-sheet { width:760px; min-width:760px; max-width:760px; flex:none; }
+    @media(max-width:640px) {
+      header .h-16 { height:auto; min-height:68px; padding:10px 0; gap:10px; }
+      header p { font-size:11px; line-height:1.4; max-width:240px; }
+      header .border-l { border:0; padding-left:0; }
+      main { padding:12px !important; }
+      .tab-content > .p-6, .tab-content > .p-5 { padding:16px; }
+      #tab-consultation label.flex { flex-wrap:wrap; gap:4px; }
+      #tab-consultation label > span:last-child { font-size:11px; }
+      #tab-consultation h2 { flex-wrap:wrap; font-size:17px; }
+      #tab-pharmacy > div:first-child > div:last-child { flex-wrap:wrap; }
+      #tab-pharmacy > div:first-child button { flex:1 1 100px; justify-content:center; padding:10px; }
+      #tab-consultation > div:last-child { flex-wrap:wrap; gap:12px; }
+      #tab-consultation > div:last-child > button { width:100%; justify-content:center; }
+      #tab-preview button { min-height:40px; }
+      #letterhead-calibration-bar, #letterhead-calibration-bar > div { flex-wrap:wrap; gap:8px; }
+      #cart-items-container .flex { flex-wrap:wrap; }
+      [id$="-modal"] > div { max-height:90dvh; overflow-y:auto; margin:12px; }
+    }
+
+    @media(max-width:640px) {
+      .preview-scroller { padding:0 !important; background:transparent; overflow:visible; }
+      .preview-scroller #rx-print-sheet { width:100%; min-width:0; max-width:100%; padding:18px; }
+      #rx-clinic-header { flex-direction:column; align-items:stretch; }
+      #rx-clinic-header > div:first-child { gap:12px; }
+      #rx-clinic-header .w-16 { display:none; }
+      #rx-print-sheet .min-w-28 { min-width:0; flex-basis:90px; flex-shrink:0; }
+      #rx-print-sheet table thead { display:none; }
+      #rx-print-sheet table, #rx-print-sheet tbody, #rx-print-sheet tr, #rx-print-sheet td { display:block; width:100%; }
+      #rx-print-sheet tr { border:1px solid #e2e8f0; border-radius:10px; margin-bottom:10px; padding:8px; }
+      #rx-print-sheet td { padding:4px 6px; text-align:left; }
+      #rx-print-sheet td:first-child { display:none; }
+      #rx-print-sheet td[data-label]::before { content:attr(data-label) ': '; color:#64748b; font-size:10px; }
+      #rx-print-sheet td:nth-child(3) .inline-block { display:inline-block; }
+      #rx-print-sheet > div:first-child > div:last-child { flex-direction:column; align-items:flex-start; gap:6px; }
+      #rx-print-sheet > div:first-child > div:last-child > div { flex-wrap:wrap; }
+      #rx-footer-signature-block { margin-top:20px; padding-top:16px; }
+      #rx-print-sheet .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top:18px; }
+    }
+.patient-matches:empty{display:none}.patient-matches{padding:12px;margin-bottom:16px;border:1px solid #cbd5e1;border-radius:12px;background:white}.patient-choice{display:inline-block;padding:8px 12px;margin:6px 6px 0 0;border:1px solid #cbd5e1;border-radius:8px;background:#eff6ff;color:#1d4ed8;font:inherit;font-size:12px}.history-card{padding:16px;border:1px solid #e2e8f0;border-radius:12px;margin-bottom:12px;overflow-wrap:anywhere}.history-card p{font-size:12px;margin-top:5px}  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+
+  <!-- Top Navigation Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-40 shadow-sm no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <!-- Logo and App Title -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+            <i class="fa-solid fa-notes-medical text-lg"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-display font-extrabold text-xl tracking-tight text-slate-900">Arogya</span>
+              
+            </div>
+            <p class="text-xs text-slate-500">OPD consultation and prescription tool</p>
+          </div>
+        </div>
+
+        <!-- Sync Status & Active Doctor Profile Indicator -->
+        <div class="flex items-center gap-4">
+          
+
+          <!-- Doctor Profile Chip -->
+          <div class="flex items-center gap-3 pl-4 border-l border-slate-200">
+            <div class="text-right hidden sm:block">
+              <div class="text-xs font-bold text-slate-900" id="header-doc-name"></div>
+              <div class="text-[11px] text-slate-500" id="header-doc-reg"></div>
+            </div>
+            <button onclick="openClinicSettingsModal()" title="Edit Clinic & Doctor Details" class="p-2 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-slate-100 transition-colors">
+              <i class="fa-solid fa-sliders text-sm"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Application Wrapper -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 no-print">
+    
+    <!-- Top Step Bar / Module Switcher -->
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-2 mb-6 flex flex-wrap items-center justify-between gap-2 step-bar">
+      <div class="flex items-center gap-1 sm:gap-2 step-tabs">
+        <button id="nav-btn-consultation" onclick="switchTab('consultation')" class="tab-btn px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 bg-blue-600 text-white shadow-sm">
+          <i class="fa-solid fa-user-doctor"></i>
+          <span>Consultation</span>
+        </button>
+        <button id="nav-btn-pharmacy" onclick="switchTab('pharmacy')" class="tab-btn px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all flex items-center gap-2">
+          <i class="fa-solid fa-prescription-bottle-medical"></i>
+          <span>Medicines</span>
+          <span id="cart-badge-count" class="hidden ml-1 px-1.5 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700 font-bold">0</span>
+        </button>
+        <button id="nav-btn-preview" onclick="switchTab('preview')" class="tab-btn px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all flex items-center gap-2">
+          <i class="fa-solid fa-file-invoice"></i>
+          <span>Prescription</span>
+        </button>
+        <button id="nav-btn-history" onclick="switchTab('history')" class="tab-btn px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-all flex items-center gap-2">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>History</span>
+        </button>
+      </div>
+
+      <!-- New consultation -->
+      <div class="flex items-center gap-2 step-actions">
+        <button onclick="resetEncounterForm()" class="text-xs px-3 py-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition font-medium flex items-center gap-1.5">
+          <i class="fa-solid fa-rotate-right"></i> New consultation
+        </button>
+      </div>
+    </div>
+
+    <div id="patient-matches" class="patient-matches"></div>
+    <!-- TAB 1: CLINICAL ENCOUNTER -->
+    <div id="tab-consultation" class="tab-content space-y-6">
+      
+      <!-- Patient Mobile Lookup Card -->
+      <div class="bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-800 rounded-2xl p-6 text-white shadow-lg shadow-blue-900/10">
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/30 text-blue-100 border border-blue-400/30">
+                Patient search
+              </span>
+              <span id="returning-patient-badge" class="hidden px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/30 text-emerald-100 border border-emerald-400/30">
+                <i class="fa-solid fa-check-double mr-1"></i> Returning Patient
+              </span>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-bold font-display">Find a patient</h2>
+            <p class="text-blue-200 text-xs sm:text-sm mt-0.5">Search saved patients by mobile number.</p>
+          </div>
+
+          <div class="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div class="relative flex items-center">
+              <span class="absolute left-3.5 text-blue-200 font-semibold text-sm">+91</span>
+              <input type="tel" id="patient-mobile" maxlength="10" placeholder="9876543210" 
+                     class="w-full sm:w-60 pl-12 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-blue-300/60 font-mono text-base font-medium focus:outline-none focus:ring-2 focus:ring-white/50 focus:bg-white/20 transition">
+            </div>
+            <button onclick="lookupPatientByMobile()" class="px-4 py-2.5 rounded-xl bg-white text-blue-700 hover:bg-blue-50 font-semibold text-sm shadow-md transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-magnifying-glass"></i>
+              <span>Search</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Patient Demographics & Vitals Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-id-card text-blue-600"></i>
+              <h3 class="font-bold text-slate-800 text-base">Patient details</h3>
+            </div>
+            <span class="text-xs text-slate-400"></span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-4">
+            <div class="sm:col-span-6">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Full Patient Name *</label>
+              <div class="relative">
+                <i class="fa-regular fa-user absolute left-3 top-3 text-slate-400 text-sm"></i>
+                <input type="text" id="patient-name" placeholder="Patient name" 
+                       class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+              </div>
+            </div>
+
+            <div class="sm:col-span-3">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Age (Years) *</label>
+              <input type="number" id="patient-age" placeholder="42" min="0" max="120"
+                     class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+            </div>
+
+            <div class="sm:col-span-3">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Sex *</label>
+              <select id="patient-sex" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition bg-white">
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div class="sm:col-span-6">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Occupation</label>
+              <div class="relative">
+                <i class="fa-solid fa-briefcase absolute left-3 top-3 text-slate-400 text-sm"></i>
+                <input type="text" id="patient-occupation" placeholder="Occupation (optional)" 
+                       class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+              </div>
+            </div>
+
+                        <div class="sm:col-span-6">
+              <label class="block text-xs font-semibold text-slate-600 mb-1 flex items-center justify-between">
+                <span>ABHA ID / Health Number (Optional)</span>
+                
+              </label>
+              <div class="relative">
+                <i class="fa-solid fa-address-card absolute left-3 top-3 text-slate-400 text-sm"></i>
+                <input type="text" id="patient-abha" placeholder="e.g. 12-3456-7890-1234 or ramesh@abdm" 
+                       class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none transition">
+              </div>
+            </div>
+
+            <div class="sm:col-span-6">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">City / Locality</label>
+              <div class="relative">
+                <i class="fa-solid fa-location-dot absolute left-3 top-3 text-slate-400 text-sm"></i>
+                <input type="text" id="patient-address" placeholder="City or locality" 
+                       class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition">
+              </div>
+            </div>
+                      <!-- Pediatric Dosing Helper (Triggered when Age < 12) -->
+            <div id="pediatric-banner" class="hidden sm:col-span-12 p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-xs flex items-center justify-between gap-3 text-indigo-900">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded-full bg-indigo-200 text-indigo-800 font-bold text-[10px]">👶 Pediatric Case (&lt;12 Yrs)</span>
+                <span id="pediatric-dose-text" class="font-medium">Paracetamol standard dose: 15 mg/kg per dose. Enter patient weight above to calculate exact syrup volume.</span>
+              </div>
+              <button type="button" onclick="loadPediatricFormulary()" class="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold transition shrink-0">
+                View Pediatric Syrups
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-heart-pulse text-rose-500"></i>
+              <h3 class="font-bold text-slate-800 text-base">Vitals</h3>
+            </div>
+            
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500">BP (mmHg)</label>
+              <input type="text" id="vitals-bp" placeholder="120/80" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500">Pulse (bpm)</label>
+              <input type="number" id="vitals-pulse" placeholder="78" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500">Temp (°F)</label>
+              <input type="text" id="vitals-temp" placeholder="98.6" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500">SpO2 (%)</label>
+              <input type="number" id="vitals-spo2" placeholder="99" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500">Weight (kg)</label>
+              <input type="number" id="vitals-weight" placeholder="68" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-500">RBS (mg/dL)</label>
+              <input type="number" id="vitals-rbs" placeholder="110" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Clinical History Grid -->
+      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-6">
+        <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-stethoscope text-indigo-600"></i>
+            <h3 class="font-bold text-slate-800 text-base">History</h3>
+          </div>
+          <span class="text-xs text-slate-500"></span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-blue-600"></span> Chief Complaints *
+              </label>
+              <span class="text-[11px] text-slate-400"></span>
+            </div>
+            <textarea id="clinical-chief-complaints" rows="2" placeholder="e.g. High grade fever with chills x 3 days, dry cough..." 
+                      class="w-full p-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"></textarea>
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" onclick="appendChip('clinical-chief-complaints', 'Fever x 3 days')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 transition">+ Fever</button>
+              <button type="button" onclick="appendChip('clinical-chief-complaints', 'Productive cough x 5 days')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-blue-100 hover:text-blue-700 transition">+ Cough</button>
+              <button type="button" onclick="appendChip('clinical-chief-complaints', 'Itchy scaling skin rash x 2 weeks')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-purple-100 hover:text-purple-700 transition">+ Itchy Rash</button>
+              <button type="button" onclick="appendChip('clinical-chief-complaints', 'Acid reflux & epigastric burning')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-emerald-100 hover:text-emerald-700 transition">+ Acidity</button>
+              <button type="button" onclick="appendChip('clinical-chief-complaints', 'Anxiety, palpitations & sleep disturbance')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-amber-100 hover:text-amber-700 transition">+ Anxiety</button>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-indigo-500"></span> Associated complaints
+              </label>
+              <span class="text-[11px] text-slate-400"></span>
+            </div>
+            <textarea id="clinical-asoo-complaints" rows="2" placeholder="e.g. Mild nausea, generalized myalgia, loss of appetite..." 
+                      class="w-full p-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"></textarea>
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" onclick="appendChip('clinical-asoo-complaints', 'Nausea without vomiting')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-indigo-100 hover:text-indigo-700 transition">+ Nausea</button>
+              <button type="button" onclick="appendChip('clinical-asoo-complaints', 'Severe body aches & malaise')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-indigo-100 hover:text-indigo-700 transition">+ Body ache</button>
+              <button type="button" onclick="appendChip('clinical-asoo-complaints', 'Night-time severe pruritus')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-purple-100 hover:text-purple-700 transition">+ Itching at night</button>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-600"></span> History of Present Illness (HPI)
+              </label>
+              <span class="text-[11px] text-slate-400"></span>
+            </div>
+            <textarea id="clinical-history" rows="2" placeholder="Patient was asymptomatic until 3 days ago..." 
+                      class="w-full p-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"></textarea>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-amber-600"></span> Previous Consultation & Treatment History
+              </label>
+              <span class="text-[11px] text-slate-400"></span>
+            </div>
+            <textarea id="clinical-prev-consultation" rows="2" placeholder="e.g. Consulted local pharmacy yesterday, took Paracetamol 500mg..." 
+                      class="w-full p-3 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition"></textarea>
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span class="w-2 h-2 rounded-full bg-purple-600"></span> Family History
+              </label>
+              <span class="text-[11px] text-slate-400"></span>
+            </div>
+            <input type="text" id="clinical-family-history" placeholder="e.g. Father: Type 2 Diabetes & HTN; Mother: Hypothyroidism" 
+                   class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition">
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-bold text-rose-700 flex items-center gap-1.5">
+                <i class="fa-solid fa-triangle-exclamation text-rose-500"></i> Drug History & Allergies *
+              </label>
+              <span class="text-[11px] text-rose-600 font-medium">Critical</span>
+            </div>
+            <input type="text" id="clinical-drug-history" placeholder="Current medicines and known allergies" 
+                   class="w-full px-3 py-2 rounded-xl border border-rose-200 bg-rose-50/30 text-sm text-rose-900 focus:ring-2 focus:ring-rose-500 outline-none transition">
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" onclick="appendInput('clinical-drug-history', 'No Known Drug Allergies (NKDA)')" class="text-[11px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition">No known drug allergies</button>
+              <button type="button" onclick="appendInput('clinical-drug-history', 'Allergic to Penicillin / Amoxicillin')" class="text-[11px] px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 hover:bg-rose-200 transition">+ Penicillin Allergy</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-100 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+              <i class="fa-solid fa-clipboard-check text-blue-600"></i> Assessment / diagnosis *
+            </label>
+            <span class="text-[11px] text-slate-400"></span>
+          </div>
+          <div class="relative">
+            <input type="text" id="clinical-summary" placeholder="Assessment or provisional diagnosis with Pharyngitis" 
+                   class="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-semibold text-slate-800 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition">
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between bg-slate-100 p-4 rounded-2xl">
+        <div class="text-xs text-slate-500">
+          <i class="fa-solid fa-circle-info mr-1 text-blue-500"></i> 
+        </div>
+        <button onclick="switchTab('pharmacy')" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow-md transition flex items-center gap-2">
+          <span>Next: Medicines</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 2: MEDICINE "CHECKOUT" PAGE WITH SCROLLABLE PRESETS & GENERICS -->
+    <div id="tab-pharmacy" class="tab-content hidden space-y-6">
+      
+      <!-- Top Banner for Pharmacy Checkout -->
+      <div class="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg sm:text-xl font-bold font-display text-slate-900 flex items-center gap-2">
+            <span class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm">
+              <i class="fa-solid fa-cart-shopping"></i>
+            </span>
+            <span>Medicines</span>
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">Search medicines or use your saved templates.</p>
+        </div>
+
+        <div class="flex items-center gap-2 w-full md:w-auto">
+          <button onclick="openSavePresetModal()" class="px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shadow-sm">
+            <i class="fa-solid fa-star text-amber-500"></i> Save template
+          </button>
+          <button onclick="openCustomMedModal()" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center gap-1.5">
+            <i class="fa-solid fa-plus text-blue-600"></i> Add medicine
+          </button>
+          <button onclick="switchTab('preview')" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2">
+            <i class="fa-solid fa-check"></i> Preview
+          </button>
+        </div>
+      </div>
+
+      <!-- SECTION 1: SCROLLABLE & SEARCHABLE CLINICAL PRESETS BROWSER -->
+      <div class="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-5 text-white shadow-lg space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-xl bg-amber-400 text-slate-950 flex items-center justify-center text-sm font-black shadow-md">
+              <i class="fa-solid fa-bolt"></i>
+            </span>
+            <div>
+              <h3 class="font-bold text-base tracking-tight flex items-center gap-2">
+                <span>Your templates</span>
+                <span id="presets-count-badge" class="text-xs px-2 py-0.5 rounded-full bg-white/20 text-blue-200 font-medium">0 templates</span>
+              </h3>
+              <p class="text-xs text-blue-200/80 mt-0.5">Save frequently used prescriptions as your own templates.</p>
+            </div>
+          </div>
+
+          <!-- Preset Search Input -->
+          <div class="w-full sm:w-72 relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-blue-300 text-xs"></i>
+            <input type="text" id="preset-search-input" onkeyup="filterPresets()" placeholder="Search preset (e.g. rash, fungal, anxiety, fever)..." 
+                   class="w-full pl-8 pr-7 py-1.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder-blue-300/60 text-xs focus:outline-none focus:ring-2 focus:ring-white/40">
+            <button onclick="clearPresetSearch()" id="clear-preset-search-btn" class="hidden absolute right-2.5 top-2 text-blue-300 hover:text-white text-xs">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Presets Category Filter Tabs -->
+        <div id="presets-category-pills" class="hidden"></div>
+
+        <!-- Scrollable Presets Grid -->
+        <div id="presets-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 max-h-[360px] overflow-y-auto pr-1">
+          <!-- Dynamically populated preset cards -->
+        </div>
+      </div>
+
+      <!-- SECTION 2: TWO-COLUMN FORMULARY CATALOG & PRESCRIPTION CART -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- LEFT COLUMN: Searchable & Scrollable Indian Generics & Brand Formulary (5 Cols) -->
+        <div class="lg:col-span-5 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2">
+              <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
+              <h3 class="font-bold text-slate-800 text-sm">Medicine catalogue</h3>
+            </div>
+            <span id="catalog-count-label" class="text-xs text-slate-400 font-medium">69 Drugs</span>
+          </div>
+
+          <!-- Live Search Bar -->
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400 text-sm"></i>
+            <input type="text" id="med-search-input" onkeyup="filterMedicines()" placeholder="Search generic salt or brand (e.g. Paracetamol, Dolo, Itraconazole, Telma)..." 
+                   class="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 outline-none transition">
+            <button onclick="clearMedSearch()" id="clear-search-btn" class="hidden absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <!-- Category Filter Pills -->
+          <div class="flex flex-wrap gap-1 border-b border-slate-100 pb-2.5" id="category-pills-container">
+            <button onclick="setCategoryFilter('all')" class="cat-pill active px-2.5 py-1 rounded-lg text-xs font-semibold bg-blue-600 text-white transition">All</button>
+            <button onclick="setCategoryFilter('Analgesic')" class="cat-pill px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Pain/Fever</button>
+            <button onclick="setCategoryFilter('Antibiotic')" class="cat-pill px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Antibiotics</button>
+            <button onclick="setCategoryFilter('Gastro')" class="cat-pill px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Acidity/PPI</button>
+            <button onclick="setCategoryFilter('Respiratory')" class="cat-pill px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Cough/Allergy</button>
+            <button onclick="setCategoryFilter('Skin')" class="cat-pill px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Skin/Fungal</button>
+            <button onclick="setCategoryFilter('Neuro')" class="cat-pill px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Anxiety/Sleep</button>
+            <button onclick="setCategoryFilter('Cardio')" class="cat-pill px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">BP/Heart</button>
+            <button onclick="setCategoryFilter('Diabetes')" class="cat-pill px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Diabetes</button>
+            <button onclick="setCategoryFilter('Vitamins')" class="cat-pill px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 transition">Vitamins</button>
+          </div>
+
+          <!-- Scrollable Medicines List -->
+          <div id="medicines-list-container" class="space-y-2 max-h-[560px] overflow-y-auto pr-1">
+            <!-- Dynamic Medicine Cards Injected Here -->
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Selected Prescription "Cart" (7 Cols) -->
+        <div class="lg:col-span-7 space-y-6">
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div class="flex items-center gap-2">
+                <span class="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">℞</span>
+                <h3 class="font-bold text-slate-900 text-base">Prescription Cart</h3>
+                <span id="cart-items-count-badge" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">0 items</span>
+              </div>
+              <button onclick="clearPrescriptionCart()" class="text-xs text-rose-600 hover:text-rose-800 font-medium transition">
+                <i class="fa-regular fa-trash-can mr-1"></i> Clear Cart
+              </button>
+            </div>
+
+            <!-- Empty State -->
+            <div id="cart-empty-state" class="py-12 text-center space-y-3">
+              <div class="w-14 h-14 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400 text-xl">
+                <i class="fa-solid fa-basket-shopping"></i>
+              </div>
+              <div>
+                <p class="text-sm font-semibold text-slate-700">Prescription Cart is Empty</p>
+                <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">Click "Load Kit" on any condition above or "+ Add" on medicines from the catalog to configure dosage and frequency (1-0-1).</p>
+              </div>
+            </div>
+
+            <div id="cart-items-container" class="space-y-4 hidden">
+              <!-- Cart rows populated dynamically -->
+            </div>
+          </div>
+
+          <!-- Orders: Lab Tests, General Advice, and Follow-Up -->
+          <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-5">
+            <div class="border-b border-slate-100 pb-3 flex items-center gap-2">
+              <i class="fa-solid fa-notes-medical text-indigo-600"></i>
+              <h3 class="font-bold text-slate-800 text-sm">Lab Tests, Advice & Follow-Up Date</h3>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-700">Lab Investigations / Tests Ordered</label>
+                <input type="text" id="order-investigations" placeholder="e.g. Complete Blood Count (CBC), Dengue NS1 Ag, LFT" 
+                       class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <div class="flex flex-wrap gap-1.5">
+                  <button type="button" onclick="appendInput('order-investigations', 'CBC')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition">+ CBC</button>
+                  <button type="button" onclick="appendInput('order-investigations', 'RBS / Fasting Blood Sugar')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition">+ Sugar</button>
+                  <button type="button" onclick="appendInput('order-investigations', 'HbA1c')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition">+ HbA1c</button>
+                  <button type="button" onclick="appendInput('order-investigations', 'Lipid Profile')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition">+ Lipid</button>
+                  <button type="button" onclick="appendInput('order-investigations', 'Chest X-Ray PA View')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition">+ Chest X-Ray</button>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                <label class="block text-xs font-bold text-slate-700">Special Advice / Dietary Precautions</label>
+                <input type="text" id="order-advice" placeholder="e.g. Drink 3-4 liters of boiled water, light bland diet, rest..." 
+                       class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                <div class="flex flex-wrap gap-1.5">
+                  <button type="button" onclick="appendInput('order-advice', 'Plenty of oral fluids & rest')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition">+ Fluids & Rest</button>
+                  <button type="button" onclick="appendInput('order-advice', 'Avoid oily, spicy & junk food')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition">+ Avoid oily food</button>
+                  <button type="button" onclick="appendInput('order-advice', 'Keep skin folds clean and dry')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition">+ Keep skin dry</button>
+                  <button type="button" onclick="appendInput('order-advice', 'Steam inhalation twice daily')" class="text-[11px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition">+ Steam</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div class="flex items-center gap-2">
+                <i class="fa-regular fa-calendar-check text-blue-600"></i>
+                <label class="text-xs font-bold text-slate-700">Next Follow-Up Visit:</label>
+                <input type="date" id="order-followup-date" class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="setFollowupDays(3)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-700 font-medium transition">+3 Days</button>
+                <button type="button" onclick="setFollowupDays(5)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-700 font-medium transition">+5 Days</button>
+                <button type="button" onclick="setFollowupDays(7)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-700 font-medium transition">+1 Week</button>
+                <button type="button" onclick="setFollowupDays(14)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-700 font-medium transition">+2 Weeks</button>
+                <button type="button" onclick="setFollowupDays(30)" class="text-xs px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 hover:text-blue-700 font-medium transition">+1 Month</button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Proceed to Print / PDF View -->
+          <div class="flex items-center justify-between bg-slate-100 p-4 rounded-2xl">
+            <button onclick="switchTab('consultation')" class="px-4 py-2 bg-white text-slate-700 font-semibold text-xs rounded-xl border border-slate-200 hover:bg-slate-50 transition">
+              <i class="fa-solid fa-arrow-left mr-1"></i> Back to Complaints & Vitals
+            </button>
+            <button onclick="switchTab('preview')" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-xl shadow-md transition flex items-center gap-2">
+              <span>View & Generate Prescription</span>
+              <i class="fa-solid fa-print"></i>
+            </button>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- TAB 3: PRESCRIPTION PREVIEW (WITH LETTERHEAD MODE & REGIONAL LANGUAGES) -->
+    <div id="tab-preview" class="tab-content hidden space-y-6">
+      
+      <!-- Action Toolbar -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3">
+        
+        <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+            <h2 class="text-base sm:text-lg font-bold text-slate-800">Prescription</h2>
+          </div>
+
+          <!-- Core Actions -->
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="printPrescription()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2">
+              <i class="fa-solid fa-print"></i>
+              <span>Print</span>
+            </button>
+
+            <button onclick="downloadPrescriptionPDF()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2">
+              <i class="fa-solid fa-file-pdf"></i>
+              <span>Download PDF</span>
+            </button>
+
+            <button onclick="sendViaWhatsApp()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold rounded-xl shadow-md transition flex items-center gap-2">
+              <i class="fa-brands fa-whatsapp text-base"></i>
+              <span>WhatsApp</span>
+            </button>
+
+            <button onclick="saveCurrentEncounter()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-semibold rounded-xl transition flex items-center gap-1.5">
+              <i class="fa-solid fa-floppy-disk text-blue-600"></i>
+              <span>Save</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Controls for Pre-Printed Letterhead & Regional Language -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <span class="text-xs font-bold text-slate-800 block">Print Stationery Mode:</span>
+              <span class="text-[11px] text-slate-500" id="stationery-desc">Prints clinic header & doctor signature block.</span>
+            </div>
+            
+            <div class="flex items-center gap-1 bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+              <button id="btn-mode-blank" onclick="setStationeryMode('blank')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white transition flex items-center gap-1">
+                <i class="fa-regular fa-file"></i> Blank A4
+              </button>
+              <button id="btn-mode-letterhead" onclick="setStationeryMode('letterhead')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-1">
+                <i class="fa-solid fa-scroll"></i> Pre-Printed Pad
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <span class="text-xs font-bold text-slate-800 block">Patient Timing Language:</span>
+              <span class="text-[11px] text-slate-500">Prints timing & food instructions in local language.</span>
+            </div>
+
+            <select id="patient-lang-select" onchange="changePatientLanguage(this.value)" 
+                    class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-bold text-blue-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none">
+              <option value="en">English (Default)</option>
+              <option value="hi">हिंदी (Hindi)</option>
+              <option value="ta">தமிழ் (Tamil)</option>
+              <option value="te">తెలుగు (Telugu)</option>
+              <option value="kn">ಕನ್ನಡ (Kannada)</option>
+              <option value="bn">বাংলা (Bengali)</option>
+              <option value="mr">मराठी (Marathi)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Margin calibration for pre-printed letterhead mode -->
+        <div id="letterhead-calibration-bar" class="hidden bg-amber-50 border border-amber-200 p-3 rounded-xl flex items-center justify-between text-xs text-amber-900">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-ruler-combined text-amber-600"></i>
+            <span>Pre-Printed Letterhead Top Margin:</span>
+            <input type="range" id="letterhead-top-slider" min="30" max="95" value="60" oninput="updateLetterheadMargin(this.value)" class="w-32 cursor-pointer">
+            <span id="letterhead-margin-val" class="font-bold font-mono">60 mm</span>
+          </div>
+          <span class="text-[11px] text-amber-700 italic">Adjust slider so prescription starts exactly below your pre-printed clinic logo pad!</span>
+        </div>
+
+      </div>
+
+              <!-- Prescription Elements Visibility Customizer -->
+        <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-eye text-blue-600"></i>
+            <span class="font-bold text-slate-800">Print Sections:</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 text-slate-700 font-medium">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="toggle-show-vitals" checked onchange="toggleRxSection('vitals', this.checked)" class="rounded text-blue-600 focus:ring-0">
+              <span>Vitals</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="toggle-show-chief" checked onchange="toggleRxSection('chief', this.checked)" class="rounded text-blue-600 focus:ring-0">
+              <span>Chief Complaints</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="toggle-show-diag" checked onchange="toggleRxSection('diag', this.checked)" class="rounded text-blue-600 focus:ring-0">
+              <span>Diagnosis</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="toggle-show-labs" checked onchange="toggleRxSection('labs', this.checked)" class="rounded text-blue-600 focus:ring-0">
+              <span>Investigations</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="toggle-show-advice" checked onchange="toggleRxSection('advice', this.checked)" class="rounded text-blue-600 focus:ring-0">
+              <span>Diet & Advice</span>
+            </label>
+          </div>
+          <button onclick="openShortcutsModal()" class="text-xs px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:text-blue-600 hover:bg-slate-100 transition flex items-center gap-1.5">
+            <i class="fa-regular fa-keyboard"></i> Hotkeys (<kbd class="font-mono text-[10px]">?</kbd>)
+          </button>
+        </div>
+
+      <!-- Live A4 Indian Prescription Preview -->
+      <div class="flex justify-center p-2 sm:p-4 bg-slate-200/60 rounded-3xl overflow-x-auto preview-scroller">
+        
+        <div id="rx-print-sheet" class="w-full max-w-[800px] bg-white rounded-lg shadow-xl border border-slate-300 p-8 sm:p-10 space-y-6 text-slate-800 relative min-h-[1050px] flex flex-col justify-between">
+          
+          <div class="space-y-6">
+            
+            <div id="rx-letterhead-spacer" class="hidden border-b border-dashed border-amber-300 pb-2 text-center text-[10px] text-amber-600 font-mono no-print">
+              [ Pre-printed Letterhead Pad Margin Area (<span id="spacer-label">60mm</span>) - Clinic Header is hidden for print ]
+            </div>
+
+            <!-- 1. CLINIC & DOCTOR HEADER -->
+            <div id="rx-clinic-header" class="border-b-2 border-slate-900 pb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-blue-700 text-white flex items-center justify-center font-bold text-2xl shadow-md">
+                  <i class="fa-solid fa-hospital"></i>
+                </div>
+                <div>
+                  <h1 class="text-xl sm:text-2xl font-black font-display text-slate-900 tracking-tight" id="rx-clinic-name"></h1>
+                  <p class="text-xs font-semibold text-blue-700" id="rx-clinic-tagline"></p>
+                  <p class="text-[11px] text-slate-500 mt-0.5" id="rx-clinic-address"></p>
+                  <p class="text-[11px] text-slate-500" id="rx-clinic-phone"></p>
+                </div>
+              </div>
+
+              <div class="text-left sm:text-right border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                <div class="font-bold text-base text-slate-900" id="rx-doc-name"></div>
+                <div class="text-xs text-slate-600 font-medium" id="rx-doc-degree"></div>
+                <div class="text-[11px] font-mono text-blue-800 font-semibold" id="rx-doc-reg"></div>
+                
+              </div>
+            </div>
+
+            <!-- 2. PATIENT DEMOGRAPHIC STRIP -->
+            <div class="bg-slate-50 rounded-xl p-3.5 border border-slate-200 text-xs">
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Patient Name</span>
+                  <span class="font-bold text-slate-900 text-sm" id="rx-preview-patient-name"></span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Age / Sex</span>
+                  <span class="font-semibold text-slate-800" id="rx-preview-patient-age-sex"></span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Mobile Number</span>
+                  <span class="font-mono font-bold text-blue-700" id="rx-preview-patient-mobile"></span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Date & Time</span>
+                  <span class="font-semibold text-slate-800" id="rx-preview-date"></span>
+                </div>
+                                <div id="rx-preview-abha-box" class="hidden sm:col-span-2">
+                  <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">ABHA Health ID</span>
+                  <span class="font-mono font-bold text-slate-800" id="rx-preview-abha">--</span>
+                </div>
+                <div class="sm:col-span-2">
+                  <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Occupation & Locality</span>
+                  <span class="text-slate-700" id="rx-preview-patient-occ"></span>
+                </div>
+                <div class="sm:col-span-2">
+                  <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Vitals Recorded</span>
+                  <span class="text-slate-700 font-mono text-[11px]" id="rx-preview-vitals"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. CLINICAL SUMMARY & PRESENTING COMPLAINTS -->
+            <div class="border-b border-slate-200 pb-4 space-y-2 text-xs">
+              <div class="flex items-start gap-2">
+                <span class="font-bold text-slate-900 min-w-28">Diagnosis:</span>
+                <span class="font-bold text-blue-900 text-sm bg-blue-50 px-2 py-0.5 rounded border border-blue-200" id="rx-preview-diagnosis"></span>
+              </div>
+              <div class="flex items-start gap-2" id="rx-preview-chief-container">
+                <span class="font-semibold text-slate-600 min-w-28">Chief Complaints:</span>
+                <span class="text-slate-800" id="rx-preview-chief"></span>
+              </div>
+              <div class="flex items-start gap-2" id="rx-preview-allergies-container">
+                <span class="font-bold text-rose-600 min-w-28">Drug Allergies:</span>
+                <span class="font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200" id="rx-preview-allergies"></span>
+              </div>
+            </div>
+
+            <!-- 4. THE Rx MEDICINES TABLE WITH LOCAL LANGUAGE SUPPORT -->
+            <div class="space-y-3">
+              <div class="flex items-center justify-between text-blue-700">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl font-serif font-black">℞</span>
+                  <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Prescribed Medications</span>
+                </div>
+                <span id="rx-lang-badge" class="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 font-medium">Instructions: English</span>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border border-slate-200 rounded-lg overflow-hidden">
+                  <thead class="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th class="py-2.5 px-3 w-8">#</th>
+                      <th class="py-2.5 px-3">Medicine & Strength</th>
+                      <th class="py-2.5 px-3 text-center">Timing (M-A-N)</th>
+                      <th class="py-2.5 px-3">When to Take</th>
+                      <th class="py-2.5 px-3">Duration</th>
+                      <th class="py-2.5 px-3">Instructions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rx-preview-table-body" class="divide-y divide-slate-100 text-slate-800">
+                    <!-- Rows dynamically generated with localized labels -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 5. INVESTIGATIONS & GENERAL ADVICE -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2">
+              <div class="bg-slate-50/80 p-3 rounded-xl border border-slate-200 space-y-1" id="rx-preview-lab-box">
+                <span class="font-bold text-slate-800 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                  <i class="fa-solid fa-vial-circle-check text-indigo-600"></i> Investigations Ordered
+                </span>
+                <p class="text-slate-700 font-medium" id="rx-preview-lab-text"></p>
+              </div>
+
+              <div class="bg-slate-50/80 p-3 rounded-xl border border-slate-200 space-y-1" id="rx-preview-advice-box">
+                <span class="font-bold text-slate-800 flex items-center gap-1.5 text-[11px] uppercase tracking-wider">
+                  <i class="fa-solid fa-list-check text-emerald-600"></i> Advice & Precautions
+                </span>
+                <p class="text-slate-700" id="rx-preview-advice-text"></p>
+              </div>
+            </div>
+
+            <!-- 6. FOLLOW-UP DATE CALLOUT -->
+            <div class="flex items-center justify-between p-3 rounded-xl bg-blue-50/60 border border-blue-200 text-xs">
+              <div class="flex items-center gap-2">
+                <i class="fa-regular fa-calendar-days text-blue-700 text-base"></i>
+                <span class="font-bold text-slate-900">Next Review / Follow-Up:</span>
+                <span class="font-bold text-blue-800" id="rx-preview-followup-date"></span>
+              </div>
+              <span class="text-[10px] text-slate-500 italic"></span>
+            </div>
+
+          </div>
+
+          <!-- 7. FOOTER: SIGNATURE BLOCK & STATUTORY DISCLAIMER -->
+          <div id="rx-footer-signature-block" class="border-t-2 border-slate-200 pt-6 mt-8 space-y-4">
+            <div class="flex items-end justify-between">
+              <div class="signature-space"></div>
+
+              <div class="text-center">
+                <div class="h-12 flex items-center justify-center">
+                  <span class="text-sm text-slate-700" id="rx-signature-display"></span>
+                </div>
+                <div class="w-44 border-t border-slate-400 pt-1 text-center">
+                  <div class="font-bold text-xs text-slate-900">Doctor's Signature / Seal</div>
+                  <div class="text-[10px] text-slate-500" id="rx-signature-reg"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="text-center text-[9px] text-slate-400 pt-2 border-t border-slate-100 flex items-center justify-between">
+              <span>Arogya</span>
+              <span>Mobile: +91-<span id="rx-footer-mobile"></span></span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- TAB 4: PATIENT ENCOUNTER ARCHIVE & VISIT HISTORY -->
+    <div id="tab-history" class="tab-content hidden space-y-6">
+      <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-clock-rotate-left text-blue-600"></i>
+              <span>Consultation history</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Stored encounters indexed by Indian mobile number. Supports offline search and 1-click repeat prescription.</p>
+          </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+            <button onclick="exportEncountersCSV()" title="Export all encounters to Excel CSV" class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition flex items-center gap-1.5">
+              <i class="fa-solid fa-file-csv text-emerald-600"></i> Export CSV
+            </button>
+            <button onclick="backupClinicData()" title="Backup full clinic database to JSON file" class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition flex items-center gap-1.5">
+              <i class="fa-solid fa-download text-blue-600"></i> Backup JSON
+            </button>
+            <label class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition flex items-center gap-1.5 cursor-pointer">
+              <i class="fa-solid fa-upload text-purple-600"></i> Restore
+              <input type="file" id="restore-json-input" accept=".json" onchange="restoreClinicData(event)" class="hidden">
+            </label>
+            <input type="text" id="archive-filter-input" onkeyup="renderArchiveList()" placeholder="Filter by mobile or name..." 
+                   class="px-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+        </div>
+
+        <div id="archive-list-container" class="space-y-3">
+          <!-- Dynamically populated past visits -->
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL: SAVE CART AS NEW CUSTOM PRESET -->
+  <div id="save-preset-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+          <i class="fa-solid fa-star text-amber-500"></i> Save Custom Clinical Preset
+        </h3>
+        <button onclick="closeSavePresetModal()" class="text-slate-400 hover:text-slate-600 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Preset Title / Condition Name *</label>
+          <input type="text" id="custom-preset-title" placeholder="e.g. Pediatric Bronchitis Kit or Chronic Migraine Protocol" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Clinical Specialty Category</label>
+          <select id="custom-preset-cat" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white">
+            <option value="Respiratory">Respiratory & Cold</option>
+            <option value="Dermatology">Dermatology & Rashes</option>
+            <option value="Neuropsychiatry">Anxiety & Neuro</option>
+            <option value="Gastroenterology">Gastroenterology & GERD</option>
+            <option value="Musculoskeletal">Pain & Musculoskeletal</option>
+            <option value="Metabolic">Diabetes & Cardio</option>
+            <option value="Infections">Infections & Fevers</option>
+            <option value="Other">Other Minor Specialty</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Provisional Diagnosis to Auto-Fill</label>
+          <input type="text" id="custom-preset-diag" placeholder="e.g. Acute Allergic Bronchitis" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Dietary / Home Advice to Auto-Fill</label>
+          <textarea id="custom-preset-advice" rows="2" placeholder="e.g. Avoid cold fluids, regular steam inhalation..." class="w-full p-2.5 rounded-xl border border-slate-200 text-sm"></textarea>
+        </div>
+
+        <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+          <span class="font-semibold text-slate-700 block mb-1">Active Cart Medicines Included:</span>
+          <div id="custom-preset-meds-summary" class="text-slate-600 space-y-0.5"></div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button onclick="closeSavePresetModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition">Cancel</button>
+        <button onclick="confirmSaveCustomPreset()" class="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition">Save to My Presets</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD CUSTOM MEDICINE TO CLINIC FORMULARY -->
+  <div id="custom-med-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+          <i class="fa-solid fa-pills text-blue-600"></i> Add Drug to Clinic Formulary
+        </h3>
+        <button onclick="closeCustomMedModal()" class="text-slate-400 hover:text-slate-600 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Brand Name *</label>
+          <input type="text" id="new-med-brand" placeholder="e.g. Dolo 650 or Calpol" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Generic Composition *</label>
+          <input type="text" id="new-med-generic" placeholder="e.g. Paracetamol 650mg" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Formulation</label>
+            <select id="new-med-form" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white">
+              <option value="TAB">Tablet (TAB)</option>
+              <option value="CAP">Capsule (CAP)</option>
+              <option value="SYR">Syrup (SYR)</option>
+              <option value="CRM">Cream (CRM)</option>
+              <option value="LOTION">Lotion</option>
+              <option value="OINT">Ointment (OINT)</option>
+              <option value="DROPS">Drops</option>
+              <option value="RESPULE">Respule</option>
+              <option value="INJ">Injection (INJ)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Category</label>
+            <select id="new-med-cat" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white">
+              <option value="Analgesic">Pain & Fever</option>
+              <option value="Antibiotic">Antibiotic</option>
+              <option value="Gastro">Gastro / Acidity</option>
+              <option value="Respiratory">Respiratory / Cough</option>
+              <option value="Skin">Skin & Fungal</option>
+              <option value="Neuro">Anxiety & Sleep</option>
+              <option value="Diabetes">Diabetes</option>
+              <option value="Cardio">Cardiovascular / BP</option>
+              <option value="Vitamins">Vitamins & Minerals</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Default Dose</label>
+            <input type="text" id="new-med-dose" placeholder="e.g. 1 Tablet" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Default Frequency</label>
+            <select id="new-med-timing" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm bg-white font-mono">
+              <option value="1-0-1">1-0-1 (BD - Morning & Night)</option>
+              <option value="1-0-0">1-0-0 (OD - Morning)</option>
+              <option value="0-0-1">0-0-1 (OD - Night)</option>
+              <option value="1-1-1">1-1-1 (TDS - Thrice daily)</option>
+              <option value="SOS">SOS (As needed)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button onclick="closeCustomMedModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition">Cancel</button>
+        <button onclick="saveCustomMedicine()" class="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition">Save Drug</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CLINIC & DOCTOR PROFILE SETTINGS -->
+  <div id="clinic-settings-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+          <i class="fa-solid fa-hospital-user text-blue-600"></i> Clinic & Doctor Header Settings
+        </h3>
+        <button onclick="closeClinicSettingsModal()" class="text-slate-400 hover:text-slate-600 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Doctor Name *</label>
+          <input type="text" id="cfg-doc-name" value="" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Qualifications / Degrees *</label>
+          <input type="text" id="cfg-doc-degree" value="" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">State Medical Council Reg. No. *</label>
+          <input type="text" id="cfg-doc-reg" value="" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm font-mono">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Clinic Name *</label>
+          <input type="text" id="cfg-clinic-name" value="" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Clinic Tagline / Subtitle</label>
+          <input type="text" id="cfg-clinic-tagline" value="" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Clinic Address</label>
+          <input type="text" id="cfg-clinic-address" value="" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Contact Phone / Email</label>
+          <input type="text" id="cfg-clinic-contact" value="" class="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm">
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+        <button onclick="closeClinicSettingsModal()" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition">Cancel</button>
+        <button onclick="saveClinicSettings()" class="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+    <!-- MODAL: KEYBOARD SHORTCUTS CHEAT SHEET -->
+  <div id="shortcuts-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <h3 class="font-bold text-slate-900 text-base flex items-center gap-2">
+          <i class="fa-regular fa-keyboard text-blue-600"></i> Clinic Keyboard Shortcuts
+        </h3>
+        <button onclick="closeShortcutsModal()" class="text-slate-400 hover:text-slate-600 text-sm">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+          <span class="text-slate-700 font-medium">Quick Search Medicines / Presets</span>
+          <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800 shadow-sm">Ctrl + K</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+          <span class="text-slate-700 font-medium">View & Print</span>
+          <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800 shadow-sm">Ctrl + Enter</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+          <span class="text-slate-700 font-medium">Save Current Encounter</span>
+          <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800 shadow-sm">Ctrl + S</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+          <span class="text-slate-700 font-medium">Switch to Step 1 (Encounter)</span>
+          <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800 shadow-sm">Alt + 1</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+          <span class="text-slate-700 font-medium">Switch to Step 2 (Checkout Cart)</span>
+          <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800 shadow-sm">Alt + 2</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+          <span class="text-slate-700 font-medium">Switch to Step 3 (Print & Share)</span>
+          <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800 shadow-sm">Alt + 3</kbd>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-100">
+          <span class="text-slate-700 font-medium">Close Active Modal / Reset</span>
+          <kbd class="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-slate-800 shadow-sm">Escape</kbd>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-end">
+        <button onclick="closeShortcutsModal()" class="px-4 py-2 text-xs font-semibold bg-blue-600 text-white rounded-xl shadow transition">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 hidden max-w-sm px-4 py-3 rounded-2xl shadow-xl border text-sm font-medium transition-all transform duration-300 flex items-center gap-3">
+    <i id="toast-icon" class="text-base"></i>
+    <span id="toast-message"></span>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- APPLICATION LOGIC WITH PRESETS, LETTERHEAD ENGINE & VERNACULAR DICTIONARY -->
+  <!-- ========================================================================= -->
+  <script>
+    // --- 1. COMPREHENSIVE INDIAN MEDICINE FORMULARY & CLINICAL PRESETS ---
+    const RAW_DEFAULT_MEDICINES = [{"id": "med-1", "brand": "Dolo 650", "generic": "Paracetamol 650mg", "form": "TAB", "cat": "Analgesic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "3 Days", "instructions": "Take SOS for fever > 100\u00b0F or headache"}, {"id": "med-2", "brand": "Crocin 500", "generic": "Paracetamol 500mg", "form": "TAB", "cat": "Analgesic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "3 Days", "instructions": "For mild fever and body aches"}, {"id": "med-3", "brand": "Zerodol-SP", "generic": "Aceclofenac 100mg + Paracetamol 325mg + Serratiopeptidase 15mg", "form": "TAB", "cat": "Analgesic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "3 Days", "instructions": "For severe pain, sprain, or joint swelling"}, {"id": "med-4", "brand": "Voveran Plus", "generic": "Diclofenac Sodium 50mg + Paracetamol 325mg", "form": "TAB", "cat": "Analgesic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "3 Days", "instructions": "Take with water after meals; avoid on empty stomach"}, {"id": "med-5", "brand": "Meftal-Spas", "generic": "Mefenamic Acid 250mg + Dicyclomine HCl 10mg", "form": "TAB", "cat": "Analgesic", "defaultDose": "1 Tablet", "defaultTiming": "SOS", "defaultWhen": "After Food (PC)", "defaultDuration": "2 Days", "instructions": "For spasmodic abdominal cramps or dysmenorrhea"}, {"id": "med-6", "brand": "Ultracet", "generic": "Tramadol 37.5mg + Paracetamol 325mg", "form": "TAB", "cat": "Analgesic", "defaultDose": "1 Tablet", "defaultTiming": "SOS", "defaultWhen": "After Food (PC)", "defaultDuration": "3 Days", "instructions": "For acute moderate to severe trauma or musculoskeletal pain"}, {"id": "med-7", "brand": "Augmentin 625", "generic": "Amoxicillin 500mg + Clavulanic Acid 125mg", "form": "TAB", "cat": "Antibiotic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "Complete full 5-day antibiotic course; do not discontinue early"}, {"id": "med-8", "brand": "Azithral 500", "generic": "Azithromycin 500mg", "form": "TAB", "cat": "Antibiotic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "3 Days", "instructions": "Once daily 1 hour before breakfast; 3-day course"}, {"id": "med-9", "brand": "Taxim-O 200", "generic": "Cefixime 200mg", "form": "TAB", "cat": "Antibiotic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "For typhoid, bronchitis, or urinary tract infections"}, {"id": "med-10", "brand": "Gudcef 200", "generic": "Cefpodoxime Proxetil 200mg", "form": "TAB", "cat": "Antibiotic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "Take after meals; for respiratory and skin infections"}, {"id": "med-11", "brand": "Cifran-CT", "generic": "Ciprofloxacin 500mg + Tinidazole 600mg", "form": "TAB", "cat": "Antibiotic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "For acute bacterial/protozoal gastroenteritis"}, {"id": "med-12", "brand": "Norflox-TZ", "generic": "Norfloxacin 400mg + Tinidazole 600mg", "form": "TAB", "cat": "Antibiotic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "For amoebic dysentery and infectious diarrhea"}, {"id": "med-13", "brand": "Dox-100", "generic": "Doxycycline 100mg", "form": "CAP", "cat": "Antibiotic", "defaultDose": "1 Capsule", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "7 Days", "instructions": "Take with a full glass of water; stay upright for 30 minutes"}, {"id": "med-14", "brand": "O2 Tablet", "generic": "Ofloxacin 200mg + Ornidazole 500mg", "form": "TAB", "cat": "Antibiotic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "For mixed gastrointestinal & dental infections"}, {"id": "med-15", "brand": "Martifur 100", "generic": "Nitrofurantoin (Sustained Release) 100mg", "form": "TAB", "cat": "Antibiotic", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "7 Days", "instructions": "Specific for uncomplicated urinary tract infection (cystitis)"}, {"id": "med-16", "brand": "Flagyl 400", "generic": "Metronidazole 400mg", "form": "TAB", "cat": "Antibiotic", "defaultDose": "1 Tablet", "defaultTiming": "1-1-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "Avoid alcohol completely during course"}, {"id": "med-17", "brand": "Pan 40", "generic": "Pantoprazole 40mg", "form": "TAB", "cat": "Gastro", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "7 Days", "instructions": "Take early morning on empty stomach with water"}, {"id": "med-18", "brand": "Pan-D", "generic": "Pantoprazole 40mg + Domperidone 30mg (SR)", "form": "CAP", "cat": "Gastro", "defaultDose": "1 Capsule", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "7 Days", "instructions": "For hyperacidity with nausea and bloating; 30 mins before breakfast"}, {"id": "med-19", "brand": "Razo 20", "generic": "Rabeprazole Sodium 20mg", "form": "TAB", "cat": "Gastro", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "14 Days", "instructions": "Take 30 mins before breakfast for GERD/esophagitis"}, {"id": "med-20", "brand": "Razo-D", "generic": "Rabeprazole 20mg + Domperidone 30mg (SR)", "form": "CAP", "cat": "Gastro", "defaultDose": "1 Capsule", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "10 Days", "instructions": "Take empty stomach in the morning"}, {"id": "med-21", "brand": "Omez-D", "generic": "Omeprazole 20mg + Domperidone 10mg", "form": "CAP", "cat": "Gastro", "defaultDose": "1 Capsule", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "7 Days", "instructions": "For nausea, vomiting, and acid dyspepsia"}, {"id": "med-22", "brand": "Mucaine Gel", "generic": "Oxetacaine 10mg + Aluminium Hydroxide 0.291g + Magnesium Hydroxide 98mg / 5ml", "form": "SYR", "cat": "Gastro", "defaultDose": "10 ml", "defaultTiming": "1-1-1", "defaultWhen": "Before Food (AC)", "defaultDuration": "5 Days", "instructions": "Take 15 mins before meals; do not drink water immediately after"}, {"id": "med-23", "brand": "Sucrafil-O", "generic": "Sucralfate 1000mg + Oxetacaine 20mg / 10ml", "form": "SYR", "cat": "Gastro", "defaultDose": "10 ml", "defaultTiming": "1-0-1", "defaultWhen": "Before Food (AC)", "defaultDuration": "7 Days", "instructions": "For gastric ulcers and severe mucosal burning; 1 hour before meals"}, {"id": "med-24", "brand": "Emeset 4", "generic": "Ondansetron 4mg", "form": "TAB", "cat": "Gastro", "defaultDose": "1 Tablet", "defaultTiming": "SOS", "defaultWhen": "Before Food (AC)", "defaultDuration": "2 Days", "instructions": "For acute vomiting and nausea"}, {"id": "med-25", "brand": "Duphalac", "generic": "Lactulose Solution 10g / 15ml", "form": "SYR", "cat": "Gastro", "defaultDose": "15 ml", "defaultTiming": "0-0-1", "defaultWhen": "At Bedtime", "defaultDuration": "7 Days", "instructions": "Take with a glass of water at bedtime for constipation"}, {"id": "med-26", "brand": "Montair-LC", "generic": "Montelukast 10mg + Levocetirizine 5mg", "form": "TAB", "cat": "Respiratory", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "Take at night before sleeping; relieves cough & runny nose"}, {"id": "med-27", "brand": "Levocet 5", "generic": "Levocetirizine 5mg", "form": "TAB", "cat": "Respiratory", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "For sneezing, allergic rhinitis, and itching"}, {"id": "med-28", "brand": "Cetzine 10", "generic": "Cetirizine 10mg", "form": "TAB", "cat": "Respiratory", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "Non-drowsy anti-allergic; take at bedtime"}, {"id": "med-29", "brand": "Bilaxten 20", "generic": "Bilastine 20mg", "form": "TAB", "cat": "Respiratory", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "7 Days", "instructions": "Modern non-sedating antihistamine for urticaria and allergic rhinitis"}, {"id": "med-30", "brand": "Ascoril-D Plus", "generic": "Dextromethorphan + Chlorpheniramine + Phenylephrine", "form": "SYR", "cat": "Respiratory", "defaultDose": "10 ml", "defaultTiming": "1-1-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "For dry hacking cough; shake well before use"}, {"id": "med-31", "brand": "Ascoril LS", "generic": "Ambroxol 30mg + Levosalbutamol 1mg + Guaiphenesin 50mg / 5ml", "form": "SYR", "cat": "Respiratory", "defaultDose": "10 ml", "defaultTiming": "1-1-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "For wet productive cough with phlegm and bronchial wheeze"}, {"id": "med-32", "brand": "Otrivin Adult", "generic": "Xylometazoline HCl 0.1% w/v", "form": "DROPS", "cat": "Respiratory", "defaultDose": "2 Drops", "defaultTiming": "1-0-1", "defaultWhen": "With Food", "defaultDuration": "3 Days", "instructions": "2 drops in each nostril; strictly do not use beyond 3 consecutive days"}, {"id": "med-33", "brand": "Flomist", "generic": "Fluticasone Furoate Nasal Spray 27.5 mcg", "form": "DROPS", "cat": "Respiratory", "defaultDose": "1 Spray", "defaultTiming": "1-0-0", "defaultWhen": "With Food", "defaultDuration": "14 Days", "instructions": "1 spray in each nostril daily for chronic allergic rhinitis & sinus congestion"}, {"id": "med-34", "brand": "Budecort 0.5", "generic": "Budesonide 0.5mg / 2ml Respules", "form": "RESPULE", "cat": "Respiratory", "defaultDose": "1 Respule", "defaultTiming": "1-0-1", "defaultWhen": "With Food", "defaultDuration": "3 Days", "instructions": "Nebulization twice daily with saline for acute bronchospasm/wheeze"}, {"id": "med-35", "brand": "Canditral 100", "generic": "Itraconazole 100mg", "form": "CAP", "cat": "Skin", "defaultDose": "1 Capsule", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "14 Days", "instructions": "Take immediately after a heavy meal; for widespread fungal ringworm (tinea)"}, {"id": "med-36", "brand": "Forcan 150", "generic": "Fluconazole 150mg", "form": "TAB", "cat": "Skin", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "After Food (PC)", "defaultDuration": "Once Weekly (4 Wks)", "instructions": "Take once a week with water for candidiasis or localized fungal infections"}, {"id": "med-37", "brand": "Lulifin Cream", "generic": "Luliconazole 1% w/w Cream", "form": "CRM", "cat": "Skin", "defaultDose": "Thin Layer", "defaultTiming": "1-0-1", "defaultWhen": "With Food", "defaultDuration": "14 Days", "instructions": "Apply thin layer to affected fungal patches twice daily; keep area dry"}, {"id": "med-38", "brand": "Candid Cream", "generic": "Clotrimazole 1% w/w Cream", "form": "CRM", "cat": "Skin", "defaultDose": "Apply Locally", "defaultTiming": "1-0-1", "defaultWhen": "With Food", "defaultDuration": "10 Days", "instructions": "Clean and dry skin thoroughly before applying"}, {"id": "med-39", "brand": "Atarax 25", "generic": "Hydroxyzine HCl 25mg", "form": "TAB", "cat": "Skin", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "5 Days", "instructions": "Potent anti-pruritic for severe itching and generalized urticaria/rashes"}, {"id": "med-40", "brand": "Caladryl Lotion", "generic": "Calamine 8% + Diphenhydramine HCl 1%", "form": "LOTION", "cat": "Skin", "defaultDose": "Apply Locally", "defaultTiming": "1-1-1", "defaultWhen": "With Food", "defaultDuration": "5 Days", "instructions": "Shake well; apply with cotton for soothing itching, sunburn, or heat rash"}, {"id": "med-41", "brand": "Scaboma Lotion", "generic": "Permethrin 5% w/v Lotion", "form": "LOTION", "cat": "Skin", "defaultDose": "Full Body Application", "defaultTiming": "0-0-1", "defaultWhen": "At Bedtime", "defaultDuration": "Single Application", "instructions": "Apply neck to toes overnight (8-12 hrs), wash in morning; repeat after 7 days; treat all family members"}, {"id": "med-42", "brand": "T-Bact Ointment", "generic": "Mupirocin 2% w/w Ointment", "form": "OINT", "cat": "Skin", "defaultDose": "Apply Locally", "defaultTiming": "1-0-1", "defaultWhen": "With Food", "defaultDuration": "5 Days", "instructions": "For bacterial skin infections, boils, folliculitis, or impetigo"}, {"id": "med-43", "brand": "Faceclin Gel", "generic": "Clindamycin 1% + Nicotinamide 4% Gel", "form": "CRM", "cat": "Skin", "defaultDose": "Apply on Acne", "defaultTiming": "0-0-1", "defaultWhen": "At Bedtime", "defaultDuration": "30 Days", "instructions": "Wash face with mild cleanser and apply sparingly to acne lesions at bedtime"}, {"id": "med-44", "brand": "Nexito-Plus", "generic": "Escitalopram 10mg + Clonazepam 0.5mg", "form": "TAB", "cat": "Neuro", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "15 Days", "instructions": "Take at night; for acute generalized anxiety, panic, and stress with insomnia"}, {"id": "med-45", "brand": "Nexito 10", "generic": "Escitalopram Oxalate 10mg", "form": "TAB", "cat": "Neuro", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "First-line SSRI for persistent anxiety and depressive symptoms"}, {"id": "med-46", "brand": "Lonazep 0.5", "generic": "Clonazepam 0.5mg", "form": "TAB", "cat": "Neuro", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "7 Days", "instructions": "Short-term anxiolytic for severe anxiety spikes; avoid abrupt cessation"}, {"id": "med-47", "brand": "Ciplar 20", "generic": "Propranolol Hydrochloride 20mg", "form": "TAB", "cat": "Neuro", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "After Food (PC)", "defaultDuration": "15 Days", "instructions": "For anxiety tremors, palpitations, and migraine prophylaxis"}, {"id": "med-48", "brand": "Napra-D 500", "generic": "Naproxen 500mg + Domperidone 10mg", "form": "TAB", "cat": "Neuro", "defaultDose": "1 Tablet", "defaultTiming": "SOS", "defaultWhen": "After Food (PC)", "defaultDuration": "3 Days", "instructions": "Take at the earliest onset of acute migraine headache; rest in dark room"}, {"id": "med-49", "brand": "Sibelium 10", "generic": "Flunarizine 10mg", "form": "TAB", "cat": "Neuro", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "Preventive therapy for frequent recurring migraine headaches"}, {"id": "med-50", "brand": "Nitrest 5", "generic": "Zolpidem Tartrate 5mg", "form": "TAB", "cat": "Neuro", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "At Bedtime", "defaultDuration": "5 Days", "instructions": "Short-term treatment for severe sleep-onset insomnia; take in bed"}, {"id": "med-51", "brand": "Telma 40", "generic": "Telmisartan 40mg", "form": "TAB", "cat": "Cardio", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "First-line blood pressure control; take every morning consistently"}, {"id": "med-52", "brand": "Telma-AM", "generic": "Telmisartan 40mg + Amlodipine 5mg", "form": "TAB", "cat": "Cardio", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "Dual combination for uncontrolled hypertension"}, {"id": "med-53", "brand": "Amlong 5", "generic": "Amlodipine 5mg", "form": "TAB", "cat": "Cardio", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "Calcium channel blocker for essential hypertension"}, {"id": "med-54", "brand": "Metolar-XR 25", "generic": "Metoprolol Succinate 25mg (Extended Release)", "form": "TAB", "cat": "Cardio", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "For hypertension with tachycardia, angina, or post-MI care"}, {"id": "med-55", "brand": "Atorva 10", "generic": "Atorvastatin 10mg", "form": "TAB", "cat": "Cardio", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "Take at bedtime for cholesterol reduction and plaque stabilization"}, {"id": "med-56", "brand": "Rosuvas 10", "generic": "Rosuvastatin 10mg", "form": "TAB", "cat": "Cardio", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "Potent statin for hypercholesterolemia and dyslipidemia"}, {"id": "med-57", "brand": "Ecosprin 75", "generic": "Aspirin (Enteric Coated) 75mg", "form": "TAB", "cat": "Cardio", "defaultDose": "1 Tablet", "defaultTiming": "0-1-0", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "Take immediately after lunch; antiplatelet cardioprotection"}, {"id": "med-58", "brand": "Glycomet 500 SR", "generic": "Metformin Hydrochloride 500mg (Sustained Release)", "form": "TAB", "cat": "Diabetes", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "Take with meals to prevent gastrointestinal upset"}, {"id": "med-59", "brand": "Glycomet-GP 1", "generic": "Glimepiride 1mg + Metformin 500mg (SR)", "form": "TAB", "cat": "Diabetes", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "Before Food (AC)", "defaultDuration": "30 Days", "instructions": "Take 15 minutes before breakfast and dinner"}, {"id": "med-60", "brand": "Glycomet-GP 2", "generic": "Glimepiride 2mg + Metformin 500mg (SR)", "form": "TAB", "cat": "Diabetes", "defaultDose": "1 Tablet", "defaultTiming": "1-0-1", "defaultWhen": "Before Food (AC)", "defaultDuration": "30 Days", "instructions": "For patients requiring higher glycemic control; watch for hypoglycemia"}, {"id": "med-61", "brand": "Ziten 20", "generic": "Teneligliptin 20mg", "form": "TAB", "cat": "Diabetes", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "30 Days", "instructions": "DPP-4 inhibitor; once daily before breakfast, kidney safe"}, {"id": "med-62", "brand": "Forxiga 10", "generic": "Dapagliflozin 10mg", "form": "TAB", "cat": "Diabetes", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "30 Days", "instructions": "SGLT2 inhibitor; promotes urinary glucose excretion and cardio-renal protection"}, {"id": "med-63", "brand": "Thyronorm 50", "generic": "Levothyroxine Sodium 50 mcg", "form": "TAB", "cat": "Diabetes", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "Before Food (AC)", "defaultDuration": "30 Days", "instructions": "Take immediately on waking with plain water; wait 45 mins before tea/breakfast"}, {"id": "med-64", "brand": "Calcirol 60K", "generic": "Cholecalciferol (Vitamin D3) 60,000 IU", "form": "CAP", "cat": "Vitamins", "defaultDose": "1 Capsule", "defaultTiming": "1-0-0", "defaultWhen": "Once Weekly (8 Wks)", "defaultDuration": "8 Weeks", "instructions": "Take once a week after a fatty meal or milk for Vitamin D deficiency"}, {"id": "med-65", "brand": "Cipcal 500", "generic": "Calcium Carbonate 500mg + Vitamin D3 250 IU", "form": "TAB", "cat": "Vitamins", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "Take post dinner with water for bone health"}, {"id": "med-66", "brand": "Becosules Z", "generic": "B-Complex with Vitamin C & Zinc", "form": "CAP", "cat": "Vitamins", "defaultDose": "1 Capsule", "defaultTiming": "1-0-0", "defaultWhen": "After Food (PC)", "defaultDuration": "15 Days", "instructions": "Take daily post lunch; boosts oral ulcer healing and immunity"}, {"id": "med-67", "brand": "Neurobion Forte", "generic": "Vitamin B1, B6, B12, Nicotinamide, Calcium Pantothenate", "form": "TAB", "cat": "Vitamins", "defaultDose": "1 Tablet", "defaultTiming": "1-0-0", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "For peripheral tingling, numbness, and nerve regeneration"}, {"id": "med-68", "brand": "Orofer-XT", "generic": "Ferrous Ascorbate (Elemental Iron 100mg) + Folic Acid 1.5mg", "form": "TAB", "cat": "Vitamins", "defaultDose": "1 Tablet", "defaultTiming": "0-0-1", "defaultWhen": "After Food (PC)", "defaultDuration": "30 Days", "instructions": "For iron deficiency anemia; avoid taking with tea, coffee, or milk"}, {"id": "med-69", "brand": "Electral Sachet", "generic": "Oral Rehydration Salts (WHO Recommended Formula)", "form": "OINT", "cat": "Vitamins", "defaultDose": "1 Sachet", "defaultTiming": "SOS", "defaultWhen": "With Food", "defaultDuration": "3 Days", "instructions": "Dissolve entire sachet in 1 liter clean drinking water; sip frequently"}];
+    const RAW_DEFAULT_PRESETS = [];
+
+    // --- 2. MULTI-LANGUAGE VERNACULAR DICTIONARIES ---
+    const TRANSLATIONS = {
+      en: {
+        name: 'English',
+        timing: {
+          '1-0-1': 'Morning & Night',
+          '1-0-0': 'Morning only',
+          '0-0-1': 'Night only',
+          '1-1-1': 'Morning - Noon - Night',
+          '0-1-0': 'Afternoon only',
+          'SOS': 'When needed (SOS)'
+        },
+        when: {
+          'After Food (PC)': 'After Food',
+          'Before Food (AC)': 'Before Food (Empty stomach)',
+          'With Food': 'With Food',
+          'At Bedtime': 'At Bedtime'
+        }
+      },
+      hi: {
+        name: 'हिंदी (Hindi)',
+        timing: {
+          '1-0-1': 'सुबह - रात',
+          '1-0-0': 'केवल सुबह',
+          '0-0-1': 'केवल रात (सोते समय)',
+          '1-1-1': 'सुबह - दोपहर - रात',
+          '0-1-0': 'केवल दोपहर',
+          'SOS': 'ज़रूरत पड़ने पर'
+        },
+        when: {
+          'After Food (PC)': 'खाने के बाद',
+          'Before Food (AC)': 'खाने से पहले (खाली पेट)',
+          'With Food': 'खाने के साथ',
+          'At Bedtime': 'सोने से पहले'
+        }
+      },
+      ta: {
+        name: 'தமிழ் (Tamil)',
+        timing: {
+          '1-0-1': 'காலை - இரவு',
+          '1-0-0': 'காலை மட்டும்',
+          '0-0-1': 'இரவு மட்டும்',
+          '1-1-1': 'காலை - மதியம் - இரவு',
+          '0-1-0': 'மதியம் மட்டும்',
+          'SOS': 'தேவைப்படும் போது'
+        },
+        when: {
+          'After Food (PC)': 'உணவுக்கு பின்',
+          'Before Food (AC)': 'உணவுக்கு முன் (வெறும் வயிறு)',
+          'With Food': 'உணவுடன்',
+          'At Bedtime': 'தூங்கும் முன்'
+        }
+      },
+      te: {
+        name: 'తెలుగు (Telugu)',
+        timing: {
+          '1-0-1': 'ఉదయం - రాత్రి',
+          '1-0-0': 'ఉదయం మాత్రమే',
+          '0-0-1': 'రాత్రి మాత్రమే',
+          '1-1-1': 'ఉదయం - మధ్యాహ్నం - రాత్రి',
+          '0-1-0': 'మధ్యాహ్నం మాత్రమే',
+          'SOS': 'అవసరమైనప్పుడు'
+        },
+        when: {
+          'After Food (PC)': 'భోజనం తర్వాత',
+          'Before Food (AC)': 'భోజనానికి ముందు (ఖాళీ కడుపుతో)',
+          'With Food': 'ఆహారంతో పాటు',
+          'At Bedtime': 'పడుకునే ముందు'
+        }
+      },
+      kn: {
+        name: 'ಕನ್ನಡ (Kannada)',
+        timing: {
+          '1-0-1': 'ಮುಂಜಾನೆ - ರಾತ್ರಿ',
+          '1-0-0': 'ಮುಂಜಾನೆ ಮಾತ್ರ',
+          '0-0-1': 'ರಾತ್ರಿ ಮಾತ್ರ',
+          '1-1-1': 'ಮುಂಜಾನೆ - ಮಧ್ಯಾಹ್ನ - ರಾತ್ರಿ',
+          '0-1-0': 'ಮಧ್ಯಾಹ್ನ ಮಾತ್ರ',
+          'SOS': 'ಅಗತ್ಯವಿದ್ದಾಗ'
+        },
+        when: {
+          'After Food (PC)': 'ಊಟದ ನಂತರ',
+          'Before Food (AC)': 'ಊಟಕ್ಕೆ ಮುಂಚೆ (ಖಾಲಿ ಹೊಟ್ಟೆಯಲ್ಲಿ)',
+          'With Food': 'ಊಟದೊಂದಿಗೆ',
+          'At Bedtime': 'ಮಲಗುವ ಮುನ್ನ'
+        }
+      },
+      bn: {
+        name: 'বাংলা (Bengali)',
+        timing: {
+          '1-0-1': 'সকাল - রাত',
+          '1-0-0': 'শুধু সকালে',
+          '0-0-1': 'শুধু রাতে',
+          '1-1-1': 'সকাল - দুপুর - রাত',
+          '0-1-0': 'শুধু দুপুরে',
+          'SOS': 'প্রয়োজনে'
+        },
+        when: {
+          'After Food (PC)': 'খাওয়ার পরে',
+          'Before Food (AC)': 'খাওয়ার আগে (খালি পেটে)',
+          'With Food': 'খাবারের সাথে',
+          'At Bedtime': 'ঘুমানোর আগে'
+        }
+      },
+      mr: {
+        name: 'मराठी (Marathi)',
+        timing: {
+          '1-0-1': 'सकाळ - रात्र',
+          '1-0-0': 'फक्त सकाळी',
+          '0-0-1': 'फक्त रात्री',
+          '1-1-1': 'सकाळ - दुपार - रात्र',
+          '0-1-0': 'फक्त दुपारी',
+          'SOS': 'गरज असल्यास'
+        },
+        when: {
+          'After Food (PC)': 'जेवणानंतर',
+          'Before Food (AC)': 'जेवणाआधी (उपाशी पोटी)',
+          'With Food': 'जेवणासोबत',
+          'At Bedtime': 'झोपण्यापूर्वी'
+        }
+      }
+    };
+
+    // --- 3. APPLICATION STATE ---
+    let medicineCatalog = [];
+    let clinicalPresets = [];
+    let customPresets = [];
+    let prescriptionCart = [];
+    let activeCategory = 'all';
+    let activePresetCategory = 'all';
+    let patientDatabase = {};
+    let stationeryMode = 'blank';
+    let currentPatientLang = 'en';
+    let letterheadMargin = 60;
+
+    let clinicConfig = {
+      docName: '', docDegree: '', docReg: '', clinicName: '',
+      clinicTagline: '', clinicAddress: '', clinicContact: ''
+    };
+
+    // --- 4. INITIALIZATION ---
+    window.addEventListener('DOMContentLoaded', () => {
+      loadStateFromStorage();
+      applyClinicConfigToUI();
+      renderPresets();
+      renderMedicineCatalog();
+      renderCart();
+      updateFollowupDefault();
+      renderArchiveList();
+    });
+
+    function loadStateFromStorage() {
+      try {
+        const storedCatalog = localStorage.getItem('arogya_catalog_v3');
+        medicineCatalog = storedCatalog ? JSON.parse(storedCatalog) : [...RAW_DEFAULT_MEDICINES];
+
+        clinicalPresets = [...RAW_DEFAULT_PRESETS];
+
+        const storedCustom = localStorage.getItem('arogya_custom_presets_v3');
+        customPresets = storedCustom ? JSON.parse(storedCustom) : [];
+
+        const storedConfig = localStorage.getItem('arogya_clinic_config');
+        if (storedConfig) {
+          clinicConfig = JSON.parse(storedConfig);
+          applyClinicConfigToUI();
+        }
+
+        const storedPatients = localStorage.getItem('arogya_patients');
+        if (storedPatients) {
+          patientDatabase = JSON.parse(storedPatients);
+        } else {
+          patientDatabase = {};
+        }
+      } catch (e) {
+        medicineCatalog = [...RAW_DEFAULT_MEDICINES];
+        clinicalPresets = [...RAW_DEFAULT_PRESETS];
+        customPresets = [];
+      }
+    }
+
+    function savePatientsToStorage() {
+      try {
+        localStorage.setItem('arogya_patients', JSON.stringify(patientDatabase));
+        return true;
+      } catch (e) {
+        showToast('Could not save records. Free storage or export a backup before closing.', 'error');
+        return false;
+      }
+    }
+
+    // --- 5. TAB SWITCHING ---
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white', 'shadow-sm');
+        btn.classList.add('text-slate-600');
+      });
+
+      const targetTab = document.getElementById(`tab-${tabId}`);
+      const targetBtn = document.getElementById(`nav-btn-${tabId}`);
+      if (targetTab) targetTab.classList.remove('hidden');
+      if (targetBtn) {
+        targetBtn.classList.add('bg-blue-600', 'text-white', 'shadow-sm');
+        targetBtn.classList.remove('text-slate-600');
+      }
+
+      if (tabId === 'preview') {
+        syncPrescriptionPreview();
+      } else if (tabId === 'history') {
+        renderArchiveList();
+      }
+    }
+
+    // --- 6. SCROLLABLE & SEARCHABLE CLINICAL PRESETS ENGINE ---
+    function renderPresets() {
+      const container = document.getElementById('presets-grid-container');
+      const searchQuery = (document.getElementById('preset-search-input').value || '').toLowerCase().trim();
+
+      const allList = [
+        ...customPresets.map(p => ({ ...p, isCustom: true })),
+        ...clinicalPresets.map(p => ({ ...p, isCustom: false }))
+      ];
+
+      const filtered = allList.filter(preset => {
+        const matchesCategory = (activePresetCategory === 'all') || 
+                                (activePresetCategory === 'custom' && preset.isCustom) || 
+                                (preset.category === activePresetCategory);
+        
+        const medsSummary = (preset.medicines || []).map(m => (m.brand + ' ' + m.generic)).join(' ').toLowerCase();
+        const matchesSearch = !searchQuery || 
+                              preset.title.toLowerCase().includes(searchQuery) || 
+                              preset.diagnosis.toLowerCase().includes(searchQuery) ||
+                              preset.category.toLowerCase().includes(searchQuery) ||
+                              medsSummary.includes(searchQuery);
+
+        return matchesCategory && matchesSearch;
+      });
+
+      document.getElementById('presets-count-badge').innerText = `${filtered.length} templates`;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-10 text-center text-blue-200/60 text-xs">
+            <i class="fa-solid fa-folder-open text-xl mb-1.5 block"></i>
+            No clinical presets match "${escapeHTML(searchQuery)}". Click "Save template" above to create one!
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(preset => {
+        const medsList = preset.medicines || [];
+        const medsPreview = medsList.slice(0, 3).map(m => `<span class="bg-white/10 px-1.5 py-0.5 rounded text-[10px] text-blue-100 font-mono">${m.brand} (${m.timing})</span>`).join(' ');
+        const extraCount = medsList.length > 3 ? `<span class="text-[10px] text-blue-300 font-medium">+${medsList.length - 3} more</span>` : '';
+
+        return `
+          <div class="bg-white/5 border ${preset.isCustom ? 'border-amber-400/40 bg-amber-500/10' : 'border-white/15'} hover:border-blue-400/50 hover:bg-white/10 rounded-xl p-3 space-y-2.5 transition flex flex-col justify-between">
+            <div>
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="w-6 h-6 rounded-lg ${preset.isCustom ? 'bg-amber-400 text-slate-900' : 'bg-blue-600 text-white'} flex items-center justify-center text-xs">
+                    <i class="fa-solid ${escapeHTML(preset.icon || 'fa-prescription')}"></i>
+                  </span>
+                  <div>
+                    <h4 class="font-bold text-xs text-white leading-tight">${escapeHTML(preset.title)}</h4>
+                    <span class="text-[10px] ${escapeHTML(preset.badgeColor || 'text-blue-300')} font-semibold">${escapeHTML(preset.category)}</span>
+                    ${preset.isCustom ? '<span class="ml-1 text-[9px] bg-amber-400/30 text-amber-200 px-1.5 py-0.2 rounded font-bold">CUSTOM</span>' : ''}
+                  </div>
+                </div>
+
+                ${preset.isCustom ? `
+                  <button onclick="deleteCustomPreset('${escapeHTML(preset.id)}')" title="Delete custom preset" class="text-white/40 hover:text-rose-400 p-1 rounded transition text-xs">
+                    <i class="fa-regular fa-trash-can"></i>
+                  </button>
+                ` : ''}
+              </div>
+
+              <div class="pt-1.5 space-y-1">
+                <p class="text-[11px] text-blue-200/90 font-medium line-clamp-1">
+                  <span class="text-white/50 text-[10px]">Dx:</span> ${escapeHTML(preset.diagnosis)}
+                </p>
+                <div class="flex flex-wrap gap-1 items-center pt-0.5">
+                  ${medsPreview} ${extraCount}
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-white/10 flex items-center justify-between gap-2">
+              <span class="text-[10px] text-blue-300 font-medium">${medsList.length} Medicines</span>
+              <button onclick="applyPresetToCart('${escapeHTML(preset.id)}')" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow transition flex items-center gap-1.5">
+                <i class="fa-solid fa-bolt text-[10px]"></i> Load Kit
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterPresets() {
+      const q = (document.getElementById('preset-search-input').value || '').trim();
+      const clearBtn = document.getElementById('clear-preset-search-btn');
+      if (q) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+      renderPresets();
+    }
+
+    function clearPresetSearch() {
+      document.getElementById('preset-search-input').value = '';
+      document.getElementById('clear-preset-search-btn').classList.add('hidden');
+      renderPresets();
+    }
+
+    function setPresetCategory(cat) {
+      activePresetCategory = cat;
+      document.querySelectorAll('.preset-cat-pill').forEach(btn => {
+        btn.classList.remove('active', 'bg-blue-600', 'text-white');
+        btn.classList.add('bg-white/10', 'text-blue-200');
+      });
+      event.target.classList.add('active', 'bg-blue-600', 'text-white');
+      event.target.classList.remove('bg-white/10', 'text-blue-200');
+      renderPresets();
+    }
+
+    function applyPresetToCart(presetId) {
+      const allList = [...customPresets, ...clinicalPresets];
+      const preset = allList.find(p => p.id === presetId);
+      if (!preset) return;
+
+      prescriptionCart = JSON.parse(JSON.stringify(preset.medicines || []));
+
+      if (preset.diagnosis) {
+        document.getElementById('clinical-summary').value = preset.diagnosis;
+      }
+      if (preset.advice) {
+        document.getElementById('order-advice').value = preset.advice;
+      }
+      if (preset.investigations) {
+        document.getElementById('order-investigations').value = preset.investigations;
+      }
+      if (preset.followupDays) {
+        setFollowupDays(preset.followupDays);
+      }
+
+      renderCart();
+      renderMedicineCatalog();
+      showToast(`Loaded clinical preset: "${escapeHTML(preset.title)}" into cart`, 'success');
+    }
+
+    function openSavePresetModal() {
+      if (prescriptionCart.length === 0) {
+        showToast('Prescription Cart is empty! Add medicines before saving a preset.', 'error');
+        return;
+      }
+
+      const diag = document.getElementById('clinical-summary').value.trim();
+      const advice = document.getElementById('order-advice').value.trim();
+
+      document.getElementById('custom-preset-title').value = diag ? `${diag} Kit` : 'My Custom Clinical Kit';
+      document.getElementById('custom-preset-diag').value = diag;
+      document.getElementById('custom-preset-advice').value = advice;
+
+      const summaryDiv = document.getElementById('custom-preset-meds-summary');
+      summaryDiv.innerHTML = prescriptionCart.map((m, i) => `${i+1}. <strong>${m.brand}</strong> (${m.generic}) - ${m.timing} [${m.when}] for ${m.duration}`).join('<br>');
+
+      document.getElementById('save-preset-modal').classList.remove('hidden');
+    }
+
+    function closeSavePresetModal() {
+      document.getElementById('save-preset-modal').classList.add('hidden');
+    }
+
+    function confirmSaveCustomPreset() {
+      const title = document.getElementById('custom-preset-title').value.trim();
+      const cat = document.getElementById('custom-preset-cat').value;
+      const diag = document.getElementById('custom-preset-diag').value.trim();
+      const advice = document.getElementById('custom-preset-advice').value.trim();
+
+      if (!title) {
+        showToast('Please enter a title for this preset', 'error');
+        return;
+      }
+
+      const newPreset = {
+        id: 'cust-preset-' + Date.now(),
+        title: title,
+        category: cat,
+        icon: 'fa-star',
+        badgeColor: 'bg-amber-100 text-amber-800',
+        diagnosis: diag,
+        advice: advice,
+        investigations: document.getElementById('order-investigations').value.trim(),
+        followupDays: 7,
+        medicines: JSON.parse(JSON.stringify(prescriptionCart))
+      };
+
+      customPresets.unshift(newPreset);
+      try {
+        localStorage.setItem('arogya_custom_presets_v3', JSON.stringify(customPresets));
+      } catch (e) {}
+
+      renderPresets();
+      closeSavePresetModal();
+      showToast(`Saved custom preset "${title}" to your presets library!`, 'success');
+    }
+
+    function deleteCustomPreset(presetId) {
+      if (!confirm('Are you sure you want to delete this custom preset?')) return;
+      customPresets = customPresets.filter(p => p.id !== presetId);
+      try {
+        localStorage.setItem('arogya_custom_presets_v3', JSON.stringify(customPresets));
+      } catch (e) {}
+      renderPresets();
+      showToast('Custom preset deleted', 'info');
+    }
+
+    // --- 7. MEDICINE CATALOG ENGINE ---
+    function renderMedicineCatalog() {
+      const container = document.getElementById('medicines-list-container');
+      const searchQuery = (document.getElementById('med-search-input').value || '').toLowerCase().trim();
+
+      const filtered = medicineCatalog.filter(m => {
+        const matchesCategory = (activeCategory === 'all' || m.cat === activeCategory);
+        const matchesSearch = !searchQuery || 
+          m.brand.toLowerCase().includes(searchQuery) || 
+          m.generic.toLowerCase().includes(searchQuery) ||
+          m.form.toLowerCase().includes(searchQuery);
+        return matchesCategory && matchesSearch;
+      });
+
+      document.getElementById('catalog-count-label').innerText = `${filtered.length} Drugs Available`;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="py-12 text-center text-slate-400 text-xs">
+            <i class="fa-solid fa-pills text-2xl mb-1.5 block text-slate-300"></i>
+            No drugs found matching "${escapeHTML(searchQuery)}". Click "+ Add medicine" above to add it!
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(med => {
+        const formColor = med.form === 'TAB' ? 'bg-blue-100 text-blue-700' :
+                         med.form === 'CAP' ? 'bg-purple-100 text-purple-700' :
+                         med.form === 'SYR' ? 'bg-amber-100 text-amber-800' :
+                         med.form === 'CRM' ? 'bg-emerald-100 text-emerald-800' :
+                         med.form === 'LOTION' ? 'bg-teal-100 text-teal-800' :
+                         med.form === 'DROPS' ? 'bg-sky-100 text-sky-800' :
+                         med.form === 'RESPULE' ? 'bg-indigo-100 text-indigo-800' :
+                         med.form === 'INJ' ? 'bg-rose-100 text-rose-700' : 'bg-slate-100 text-slate-700';
+
+        const inCart = prescriptionCart.some(item => item.id === med.id);
+
+        return `
+          <div class="p-3 rounded-xl border ${inCart ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-200 hover:border-blue-300 hover:bg-blue-50/20'} transition flex items-center justify-between gap-3">
+            <div class="space-y-0.5 flex-1 min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${formColor}">${escapeHTML(med.form)}</span>
+                <span class="font-bold text-slate-900 text-sm truncate">${escapeHTML(med.brand)}</span>
+              </div>
+              <p class="text-xs text-slate-600 font-medium truncate">${escapeHTML(med.generic)}</p>
+              <div class="flex items-center gap-2 text-[11px] text-slate-400 pt-0.5">
+                <span class="badge-timing bg-slate-100 px-1.5 py-0.2 rounded font-semibold text-slate-700">${escapeHTML(med.defaultTiming)}</span>
+                <span>•</span>
+                <span>${escapeHTML(med.defaultWhen)}</span>
+                <span>•</span>
+                <span>${escapeHTML(med.defaultDuration)}</span>
+              </div>
+            </div>
+
+            <button onclick="addToCart('${escapeHTML(med.id)}')" 
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold ${inCart ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white'} transition shadow-sm flex items-center gap-1">
+              <i class="fa-solid ${inCart ? 'fa-check' : 'fa-plus'} text-xs"></i>
+              <span>${inCart ? 'Added' : 'Add'}</span>
+            </button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterMedicines() {
+      const q = document.getElementById('med-search-input').value.trim();
+      const clearBtn = document.getElementById('clear-search-btn');
+      if (q) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+      renderMedicineCatalog();
+    }
+
+    function clearMedSearch() {
+      document.getElementById('med-search-input').value = '';
+      document.getElementById('clear-search-btn').classList.add('hidden');
+      renderMedicineCatalog();
+    }
+
+    function setCategoryFilter(cat) {
+      activeCategory = cat;
+      document.querySelectorAll('.cat-pill').forEach(btn => {
+        btn.classList.remove('active', 'bg-blue-600', 'text-white');
+        btn.classList.add('bg-slate-100', 'text-slate-600');
+      });
+      event.target.classList.add('active', 'bg-blue-600', 'text-white');
+      event.target.classList.remove('bg-slate-100', 'text-slate-600');
+      renderMedicineCatalog();
+    }
+
+    // --- 8. PRESCRIPTION CART ACTIONS ---
+    function addToCart(medId) {
+      const med = medicineCatalog.find(m => m.id === medId);
+      if (!med) return;
+
+      const drugHistory = (document.getElementById('clinical-drug-history').value || '').toLowerCase();
+      if (drugHistory && !drugHistory.includes('nkda')) {
+        const genericLower = med.generic.toLowerCase();
+        if ((drugHistory.includes('penicillin') || drugHistory.includes('amoxicillin')) && genericLower.includes('amoxicillin')) {
+          const proceed = confirm(`⚠️ ALLERGY WARNING!
+
+Patient has a recorded allergy to Penicillin/Amoxicillin.
+You are prescribing: ${escapeHTML(med.brand)} (${escapeHTML(med.generic)}).
+
+Do you want to override and add anyway?`);
+          if (!proceed) return;
+        }
+      }
+
+      const existing = prescriptionCart.find(i => i.id === medId);
+      if (existing) {
+        showToast(`${escapeHTML(med.brand)} is already in the prescription cart`, 'info');
+        return;
+      }
+
+      prescriptionCart.push({
+        id: med.id,
+        brand: med.brand,
+        generic: med.generic,
+        form: med.form,
+        dose: med.defaultDose,
+        timing: med.defaultTiming,
+        when: med.defaultWhen,
+        duration: med.defaultDuration,
+        instructions: med.instructions || ''
+      });
+
+      renderCart();
+      renderMedicineCatalog();
+      showToast(`Added ${escapeHTML(med.brand)} to Rx Cart`, 'success');
+    }
+
+    function removeFromCart(index) {
+      const removed = prescriptionCart[index];
+      prescriptionCart.splice(index, 1);
+      renderCart();
+      renderMedicineCatalog();
+      showToast(`Removed ${removed ? removed.brand : 'item'} from cart`, 'info');
+    }
+
+    function clearPrescriptionCart() {
+      if (prescriptionCart.length === 0) return;
+      if (confirm('Clear all items from prescription cart?')) {
+        prescriptionCart = [];
+        renderCart();
+        renderMedicineCatalog();
+        showToast('Prescription cart cleared', 'info');
+      }
+    }
+
+    function updateCartItem(index, field, value) {
+      if (prescriptionCart[index]) {
+        prescriptionCart[index][field] = value;
+      }
+    }
+
+    function renderCart() {
+      const emptyState = document.getElementById('cart-empty-state');
+      const cartContainer = document.getElementById('cart-items-container');
+      const badgeCount = document.getElementById('cart-badge-count');
+      const countLabel = document.getElementById('cart-items-count-badge');
+
+      const count = prescriptionCart.length;
+      badgeCount.innerText = count;
+      countLabel.innerText = `${count} ${count === 1 ? 'medicine' : 'medicines'}`;
+
+      if (count > 0) {
+        badgeCount.classList.remove('hidden');
+        emptyState.classList.add('hidden');
+        cartContainer.classList.remove('hidden');
+      } else {
+        badgeCount.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        cartContainer.classList.add('hidden');
+        return;
+      }
+
+      cartContainer.innerHTML = prescriptionCart.map((item, idx) => {
+        return `
+          <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/50 space-y-3 relative group">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">${idx + 1}</span>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-slate-900 text-sm">${escapeHTML(item.brand)}</span>
+                    <span class="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-slate-200 text-slate-700">${escapeHTML(item.form || '')}</span>
+                  </div>
+                  <p class="text-xs text-slate-500">${escapeHTML(item.generic)}</p>
+                </div>
+              </div>
+
+              <button onclick="removeFromCart(${idx})" title="Remove item" class="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 transition">
+                <i class="fa-regular fa-trash-can text-sm"></i>
+              </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 pt-1">
+              <div class="sm:col-span-3">
+                <label class="block text-[11px] font-semibold text-slate-500 mb-0.5">Dose / Strength</label>
+                <input type="text" value="${escapeHTML(item.dose)}" onchange="updateCartItem(${idx}, 'dose', this.value)" 
+                       class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:ring-1 focus:ring-blue-500 bg-white">
+              </div>
+
+              <div class="sm:col-span-5">
+                <label class="block text-[11px] font-semibold text-slate-500 mb-0.5">Timing (M - A - N)</label>
+                <div class="flex items-center gap-1">
+                  <select onchange="updateCartItem(${idx}, 'timing', this.value)" class="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs font-mono font-bold text-blue-700 bg-white">
+                    <option value="1-0-1" ${item.timing === '1-0-1' ? 'selected' : ''}>1-0-1 (Morning & Night)</option>
+                    <option value="1-0-0" ${item.timing === '1-0-0' ? 'selected' : ''}>1-0-0 (Morning only)</option>
+                    <option value="0-0-1" ${item.timing === '0-0-1' ? 'selected' : ''}>0-0-1 (Night only)</option>
+                    <option value="1-1-1" ${item.timing === '1-1-1' ? 'selected' : ''}>1-1-1 (Three times daily)</option>
+                    <option value="0-1-0" ${item.timing === '0-1-0' ? 'selected' : ''}>0-1-0 (Afternoon only)</option>
+                    <option value="SOS" ${item.timing === 'SOS' ? 'selected' : ''}>SOS (As needed)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="sm:col-span-4">
+                <label class="block text-[11px] font-semibold text-slate-500 mb-0.5">When to Take</label>
+                <select onchange="updateCartItem(${idx}, 'when', this.value)" class="w-full px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white text-slate-700">
+                  <option value="After Food (PC)" ${item.when === 'After Food (PC)' ? 'selected' : ''}>After Food (PC)</option>
+                  <option value="Before Food (AC)" ${item.when === 'Before Food (AC)' ? 'selected' : ''}>Before Food (AC)</option>
+                  <option value="With Food" ${item.when === 'With Food' ? 'selected' : ''}>With Food</option>
+                  <option value="At Bedtime" ${item.when === 'At Bedtime' ? 'selected' : ''}>At Bedtime</option>
+                </select>
+              </div>
+
+              <div class="sm:col-span-4">
+                <label class="block text-[11px] font-semibold text-slate-500 mb-0.5">Duration</label>
+                <input type="text" value="${escapeHTML(item.duration)}" onchange="updateCartItem(${idx}, 'duration', this.value)" 
+                       class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-blue-500 bg-white">
+              </div>
+
+              <div class="sm:col-span-8">
+                <label class="block text-[11px] font-semibold text-slate-500 mb-0.5">Special Instructions</label>
+                <input type="text" value="${escapeHTML(item.instructions || '')}" onchange="updateCartItem(${idx}, 'instructions', this.value)" placeholder="e.g. With warm water / chew tablet" 
+                       class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs focus:ring-1 focus:ring-blue-500 bg-white">
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // --- 9. PRE-PRINTED LETTERHEAD & REGIONAL LANGUAGE ---
+    function setStationeryMode(mode) {
+      stationeryMode = mode;
+      const btnBlank = document.getElementById('btn-mode-blank');
+      const btnLetterhead = document.getElementById('btn-mode-letterhead');
+      const desc = document.getElementById('stationery-desc');
+      const calibBar = document.getElementById('letterhead-calibration-bar');
+      const spacer = document.getElementById('rx-letterhead-spacer');
+      const header = document.getElementById('rx-clinic-header');
+      const footer = document.getElementById('rx-footer-signature-block');
+
+      if (mode === 'letterhead') {
+        document.body.classList.add('mode-letterhead');
+        btnLetterhead.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-600 text-white transition flex items-center gap-1 shadow-sm";
+        btnBlank.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-1";
+        desc.innerText = "Hides clinic header & footer to print directly onto physical letterhead pads.";
+        calibBar.classList.remove('hidden');
+        spacer.classList.remove('hidden');
+        header.classList.add('hidden');
+        footer.classList.add('hidden');
+        updateLetterheadMargin(letterheadMargin);
+        showToast('Switched to Pre-Printed Letterhead Mode', 'info');
+      } else {
+        document.body.classList.remove('mode-letterhead');
+        btnBlank.className = "px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white transition flex items-center gap-1 shadow-sm";
+        btnLetterhead.className = "px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 transition flex items-center gap-1";
+        desc.innerText = "Prints clinic header, logo, contact & doctor signature block on blank A4.";
+        calibBar.classList.add('hidden');
+        spacer.classList.add('hidden');
+        header.classList.remove('hidden');
+        footer.classList.remove('hidden');
+        showToast('Switched to Standard Blank A4 Mode', 'info');
+      }
+    }
+
+    function updateLetterheadMargin(val) {
+      letterheadMargin = val;
+      document.getElementById('letterhead-margin-val').innerText = `${val} mm`;
+      document.getElementById('spacer-label').innerText = `${val} mm`;
+      const spacer = document.getElementById('rx-letterhead-spacer');
+      spacer.style.height = `${val}mm`;
+    }
+
+    function changePatientLanguage(langKey) {
+      currentPatientLang = langKey;
+      const langData = TRANSLATIONS[langKey] || TRANSLATIONS['en'];
+      document.getElementById('rx-lang-badge').innerText = `Instructions: ${langData.name}`;
+      syncPrescriptionPreview();
+      showToast(`Prescription language updated to ${langData.name}`, 'success');
+    }
+
+    // --- 10. PATIENT MOBILE LOOKUP ---
+    function lookupPatientByMobile() {
+      const mobileInput = document.getElementById('patient-mobile').value.trim();
+      const cleanMobile = mobileInput.replace(/[^0-9]/g, '');
+
+      if (cleanMobile.length !== 10) {
+        showToast('Please enter a valid 10-digit Indian Mobile Number', 'error');
+        return;
+      }
+
+      const patient = patientDatabase[cleanMobile];
+      const returningBadge = document.getElementById('returning-patient-badge');
+
+      if (patient) {
+        document.getElementById('patient-name').value = patient.name || '';
+        document.getElementById('patient-age').value = patient.age || '';
+        document.getElementById('patient-sex').value = patient.sex || 'Male';
+        document.getElementById('patient-occupation').value = patient.occupation || '';
+        document.getElementById('patient-address').value = patient.address || '';
+        document.getElementById('clinical-family-history').value = patient.familyHistory || '';
+        document.getElementById('clinical-drug-history').value = patient.drugHistory || '';
+
+        returningBadge.classList.remove('hidden');
+        showToast(`Found patient records for ${patient.name} (${patient.visits ? patient.visits.length : 0} past visits)`, 'success');
+
+        if (patient.drugHistory && !patient.drugHistory.includes('NKDA')) {
+          showToast(`ALERT: Patient has recorded allergy: "${patient.drugHistory}"`, 'warning');
+        }
+      } else {
+        returningBadge.classList.add('hidden');
+        showToast(`New patient registered with mobile +91-${cleanMobile}`, 'info');
+      }
+    }
+
+    document.getElementById('patient-mobile').addEventListener('input', (e) => {
+      const val = e.target.value.replace(/[^0-9]/g, '');
+      if (val.length === 10) {
+        lookupPatientByMobile();
+      }
+    });
+
+    function resetEncounterForm() {
+      document.getElementById('patient-mobile').value = '';
+      document.getElementById('patient-abha').value = '';
+      document.getElementById('patient-sex').selectedIndex = 0;
+      document.getElementById('patient-name').value = '';
+      document.getElementById('patient-age').value = '';
+      document.getElementById('patient-occupation').value = '';
+      document.getElementById('patient-address').value = '';
+      document.getElementById('returning-patient-badge').classList.add('hidden');
+
+      document.getElementById('vitals-bp').value = '';
+      document.getElementById('vitals-pulse').value = '';
+      document.getElementById('vitals-temp').value = '';
+      document.getElementById('vitals-spo2').value = '';
+      document.getElementById('vitals-weight').value = '';
+      document.getElementById('vitals-rbs').value = '';
+
+      document.getElementById('clinical-chief-complaints').value = '';
+      document.getElementById('clinical-asoo-complaints').value = '';
+      document.getElementById('clinical-history').value = '';
+      document.getElementById('clinical-prev-consultation').value = '';
+      document.getElementById('clinical-family-history').value = '';
+      document.getElementById('clinical-drug-history').value = '';
+      document.getElementById('clinical-summary').value = '';
+
+      prescriptionCart = [];
+      document.getElementById('order-investigations').value = '';
+      document.getElementById('order-advice').value = '';
+      updateFollowupDefault();
+      renderCart();
+      showToast('Encounter form cleared', 'info');
+    }
+
+    function appendChip(elementId, text) {
+      const el = document.getElementById(elementId);
+      if (!el.value.trim()) {
+        el.value = text;
+      } else {
+        el.value = el.value.trim() + ', ' + text;
+      }
+    }
+
+    function appendInput(elementId, text) {
+      const el = document.getElementById(elementId);
+      if (!el.value.trim()) {
+        el.value = text;
+      } else if (!el.value.includes(text)) {
+        el.value = el.value.trim() + '; ' + text;
+      }
+    }
+
+    function setFollowupDays(days) {
+      const target = new Date();
+      target.setDate(target.getDate() + days);
+      const yyyy = target.getFullYear();
+      const mm = String(target.getMonth() + 1).padStart(2, '0');
+      const dd = String(target.getDate()).padStart(2, '0');
+      document.getElementById('order-followup-date').value = `${yyyy}-${mm}-${dd}`;
+    }
+
+    function updateFollowupDefault() {
+      document.getElementById('order-followup-date').value = '';
+    }
+
+    // --- 11. PRESCRIPTION PREVIEW SYNC ---
+    function syncPrescriptionPreview() {
+      document.getElementById('rx-clinic-name').innerText = clinicConfig.clinicName;
+      document.getElementById('rx-clinic-tagline').innerText = clinicConfig.clinicTagline;
+      document.getElementById('rx-clinic-address').innerText = clinicConfig.clinicAddress;
+      document.getElementById('rx-clinic-phone').innerText = clinicConfig.clinicContact;
+      document.getElementById('rx-doc-name').innerText = clinicConfig.docName;
+      document.getElementById('rx-doc-degree').innerText = clinicConfig.docDegree;
+      document.getElementById('rx-doc-reg').innerText = `${clinicConfig.docReg ? 'Reg. No: '+clinicConfig.docReg : ''}`;
+      document.getElementById('rx-signature-display').innerText = clinicConfig.docName;
+      document.getElementById('rx-signature-reg').innerText = `${clinicConfig.docReg ? 'Reg: '+clinicConfig.docReg : ''}`;
+
+      const name = document.getElementById('patient-name').value.trim() || 'Patient';
+      const age = document.getElementById('patient-age').value.trim() || '--';
+      const sex = document.getElementById('patient-sex').value;
+      const mobile = document.getElementById('patient-mobile').value.trim() || '----------';
+      const occ = document.getElementById('patient-occupation').value.trim() || 'Not specified';
+      const addr = document.getElementById('patient-address').value.trim() || '';
+
+      document.getElementById('rx-preview-patient-name').innerText = name;
+      document.getElementById('rx-preview-patient-age-sex').innerText = `${age} Yrs / ${sex}`;
+      document.getElementById('rx-preview-patient-mobile').innerText = `+91 ${mobile}`;
+      document.getElementById('rx-preview-patient-occ').innerText = `${occ} ${addr ? '| ' + addr : ''}`;
+      document.getElementById('rx-footer-mobile').innerText = mobile;
+
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      document.getElementById('rx-preview-date').innerText = `${dateStr}, ${timeStr}`;
+
+      const bp = document.getElementById('vitals-bp').value.trim();
+      const pulse = document.getElementById('vitals-pulse').value.trim();
+      const temp = document.getElementById('vitals-temp').value.trim();
+      const spo2 = document.getElementById('vitals-spo2').value.trim();
+      const wt = document.getElementById('vitals-weight').value.trim();
+      const rbs = document.getElementById('vitals-rbs').value.trim();
+
+      const vitalsParts = [];
+      if (bp) vitalsParts.push(`BP: ${bp} mmHg`);
+      if (pulse) vitalsParts.push(`Pulse: ${pulse} bpm`);
+      if (temp) vitalsParts.push(`Temp: ${temp}°F`);
+      if (spo2) vitalsParts.push(`SpO2: ${spo2}%`);
+      if (wt) vitalsParts.push(`Wt: ${wt} kg`);
+      if (rbs) vitalsParts.push(`RBS: ${rbs} mg/dL`);
+      document.getElementById('rx-preview-vitals').innerText = vitalsParts.length ? vitalsParts.join(' | ') : 'Not recorded';
+
+      const diagnosis = document.getElementById('clinical-summary').value.trim() || 'Clinical Examination & Assessment';
+      document.getElementById('rx-preview-diagnosis').innerText = diagnosis;
+
+      const chief = document.getElementById('clinical-chief-complaints').value.trim();
+      if (chief) {
+        document.getElementById('rx-preview-chief-container').classList.remove('hidden');
+        document.getElementById('rx-preview-chief').innerText = chief;
+      } else {
+        document.getElementById('rx-preview-chief-container').classList.add('hidden');
+      }
+
+      const allergies = document.getElementById('clinical-drug-history').value.trim() || 'Not recorded';
+      document.getElementById('rx-preview-allergies').innerText = allergies;
+
+      const langData = TRANSLATIONS[currentPatientLang] || TRANSLATIONS['en'];
+
+      const tableBody = document.getElementById('rx-preview-table-body');
+      if (prescriptionCart.length === 0) {
+        tableBody.innerHTML = `
+          <tr>
+            <td colspan="6" class="py-6 text-center text-slate-400 italic">No medicines prescribed.</td>
+          </tr>
+        `;
+      } else {
+        tableBody.innerHTML = prescriptionCart.map((item, idx) => {
+          const timingLabel = langData.timing[item.timing] || item.timing;
+          const whenLabel = langData.when[item.when] || item.when;
+
+          return `
+            <tr class="hover:bg-slate-50/80">
+              <td class="py-2.5 px-3 font-bold text-slate-400">${idx + 1}</td>
+              <td class="py-2.5 px-3">
+                <div class="font-bold text-slate-900">${escapeHTML(item.brand)}</div>
+                <div class="text-[10px] text-slate-500 italic">${escapeHTML(item.form || '')} • ${escapeHTML(item.generic)} • ${escapeHTML(item.dose)}</div>
+              </td>
+              <td class="py-2.5 px-3 text-center">
+                <div class="inline-block">
+                  <span class="badge-timing px-2 py-0.5 rounded bg-blue-50 text-blue-800 font-bold border border-blue-200 text-xs block">
+                    ${escapeHTML(item.timing)}
+                  </span>
+                  <span class="vernacular-text text-[10px] text-slate-500 font-medium block pt-0.5">${timingLabel}</span>
+                </div>
+              </td>
+              <td class="py-2.5 px-3">
+                <div class="font-medium text-slate-800">${escapeHTML(item.when)}</div>
+                ${currentPatientLang !== 'en' ? `<div class="vernacular-text text-[10px] text-blue-700 font-semibold">${whenLabel}</div>` : ''}
+              </td>
+              <td class="py-2.5 px-3 font-semibold text-slate-900">${escapeHTML(item.duration)}</td>
+              <td class="py-2.5 px-3 text-slate-600">${item.instructions || '--'}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      document.querySelectorAll('#rx-preview-table-body tr').forEach(row => {
+        if (row.children.length === 6) ['','Medicine','Timing','When','Duration','Instructions'].forEach((label,i) => {
+          if (label) row.children[i].dataset.label = label;
+        });
+      });
+      const labs = document.getElementById('order-investigations').value.trim();
+      const advice = document.getElementById('order-advice').value.trim();
+
+      if (labs) {
+        document.getElementById('rx-preview-lab-box').classList.remove('hidden');
+        document.getElementById('rx-preview-lab-text').innerText = labs;
+      } else {
+        document.getElementById('rx-preview-lab-box').classList.add('hidden');
+      }
+
+      if (advice) {
+        document.getElementById('rx-preview-advice-box').classList.remove('hidden');
+        document.getElementById('rx-preview-advice-text').innerText = advice;
+      } else {
+        document.getElementById('rx-preview-advice-box').classList.add('hidden');
+        document.getElementById('rx-preview-advice-text').innerText = '';
+      }
+
+            // ABHA ID
+      const abhaVal = document.getElementById('patient-abha') ? document.getElementById('patient-abha').value.trim() : '';
+      const abhaBox = document.getElementById('rx-preview-abha-box');
+      if (abhaBox) {
+        if (abhaVal) {
+          abhaBox.classList.remove('hidden');
+          document.getElementById('rx-preview-abha').innerText = abhaVal;
+        } else {
+          abhaBox.classList.add('hidden');
+        }
+      }
+
+      // Section visibility toggles
+      const vitalsBox = document.getElementById('rx-preview-vitals').parentElement;
+      if (vitalsBox) vitalsBox.style.display = rxSectionVisibility.vitals ? '' : 'none';
+
+      const diagBox = document.getElementById('rx-preview-diagnosis').parentElement;
+      if (diagBox) diagBox.style.display = rxSectionVisibility.diag ? '' : 'none';
+
+      const chiefBox = document.getElementById('rx-preview-chief-container');
+      if (chiefBox && !rxSectionVisibility.chief) chiefBox.classList.add('hidden');
+
+      const labBox = document.getElementById('rx-preview-lab-box');
+      if (labBox && !rxSectionVisibility.labs) labBox.classList.add('hidden');
+
+      const advBox = document.getElementById('rx-preview-advice-box');
+      if (advBox && !rxSectionVisibility.advice) advBox.classList.add('hidden');
+
+      const followupInput = document.getElementById('order-followup-date').value;
+      if (followupInput) {
+        const fDate = new Date(followupInput);
+        const fFormatted = fDate.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        document.getElementById('rx-preview-followup-date').innerText = `${fFormatted} `;
+      } else {
+        document.getElementById('rx-preview-followup-date').innerText = 'As needed';
+      }
+    }
+
+    // --- 12. PRINT & EXPORT ---
+    function escapeHTML(value) {
+      return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function prescriptionDocument() {
+      const e = escapeHTML;
+      const val = id => document.getElementById(id).value.trim();
+      const lang = TRANSLATIONS[currentPatientLang] || TRANSLATIONS.en;
+      const section = (title, text) => text ? `<section><h3>${e(title)}</h3><p>${e(text)}</p></section>` : '';
+      const rows = prescriptionCart.map((m,i) => `<tr><td>${i+1}</td><td><b>${e(m.brand)}</b><br>${e(m.generic)}<br>${e(m.dose)}</td><td>${e(m.timing)}<br>${e(lang.timing[m.timing] || '')}</td><td>${e(m.when)}${currentPatientLang !== 'en' ? '<br>'+e(lang.when[m.when] || '') : ''}</td><td>${e(m.duration)}</td><td>${e(m.instructions)}</td></tr>`).join('');
+      const vitals = [['BP', 'vitals-bp', 'mmHg'],['Pulse','vitals-pulse','bpm'],['Temperature','vitals-temp','°F'],['SpO₂','vitals-spo2','%'],['Weight','vitals-weight','kg'],['RBS','vitals-rbs','mg/dL']].filter(x=>val(x[1])).map(x=>`${x[0]}: ${val(x[1])} ${x[2]}`).join(' · ');
+      const date = new Date().toLocaleString('en-IN', {dateStyle:'medium', timeStyle:'short'});
+      return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prescription</title><style>
+        @page { size:A4; margin:14mm; }
+#pdf-document *{box-sizing:border-box}
+#pdf-document{background:#fff;display:block;width:100%;padding-bottom:14px;margin:0;color:#172033;font:12px/1.5 Arial,sans-serif;overflow-wrap:anywhere}
+#pdf-document header{display:flex;justify-content:space-between;gap:24px;border-bottom:2px solid #1d4ed8;padding-bottom:14px}
+#pdf-document h1{font-size:22px;margin:0 0 4px;color:#163c86}
+#pdf-document h2{font-size:16px;margin:0}
+#pdf-document h3{font-size:12px;margin:0 0 4px;color:#163c86}
+#pdf-document p{margin:3px 0;white-space:pre-wrap}
+#pdf-document .doctor{text-align:left;flex:0 0 38%;min-width:0}
+#pdf-document .patient{display:grid;grid-template-columns:1fr 1fr;gap:8px 24px;background:#f5f7fa;padding:12px;margin:16px 0}
+#pdf-document section{margin:12px 0}
+#pdf-document table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:11px;margin:16px 0}
+#pdf-document th,#pdf-document td{border-bottom:1px solid #dce2ea;padding:8px 5px;vertical-align:top;text-align:left;overflow-wrap:anywhere}
+#pdf-document th{background:#edf2f8;color:#163c86}
+#pdf-document th:first-child{width:5%}
+#pdf-document th:nth-child(2){width:28%}
+#pdf-document th:nth-child(3){width:17%}
+#pdf-document th:nth-child(4){width:18%}
+#pdf-document th:nth-child(5){width:12%}
+#pdf-document th:nth-child(6){width:20%}
+#pdf-document thead{display:table-header-group}
+#pdf-document tr{break-inside:avoid}
+#pdf-document .signature{margin:42px 0 0 auto;width:220px;text-align:left;break-inside:avoid}
+#pdf-document .signature div{border-top:1px solid #738096;padding-top:6px}
+#pdf-document footer{border-top:1px solid #dce2ea;margin-top:22px;padding-top:8px;color:#738096;font-size:10px}
+#pdf-document section{break-inside:avoid}
+      </style></head><body><div id="pdf-document">
+      ${stationeryMode === 'letterhead' ? `<div style="height:${Number(letterheadMargin)||60}mm"></div>` : `<header><div><h1>${e(clinicConfig.clinicName)}</h1>${section('',clinicConfig.clinicTagline)}<p>${e(clinicConfig.clinicAddress)}</p><p>${e(clinicConfig.clinicContact)}</p></div><div class="doctor"><h2>${e(clinicConfig.docName)}</h2><p>${e(clinicConfig.docDegree)}</p><p>Registration: ${e(clinicConfig.docReg)}</p></div></header>`}
+      <div class="patient"><div><b>Patient</b><p>${e(val('patient-name'))}</p></div><div><b>Date</b><p>${e(date)}</p></div><div>${e(val('patient-age'))} years · ${e(val('patient-sex'))}</div><div>${val('patient-mobile') ? '+91 '+e(val('patient-mobile')) : ''}</div>${val('patient-address') ? `<div>${e(val('patient-address'))}</div>` : ''}</div>
+      ${rxSectionVisibility.vitals ? section('Vitals',vitals) : ''}
+      ${rxSectionVisibility.chief ? section('Presenting complaints',val('clinical-chief-complaints')) : ''}
+      ${rxSectionVisibility.diag ? section('Assessment',val('clinical-summary')) : ''}
+      ${section('Drug history / allergies',val('clinical-drug-history') || 'Not recorded')}
+      <h2>℞</h2><table><thead><tr><th>#</th><th>Medicine / dose</th><th>Timing</th><th>When to take</th><th>Duration</th><th>Instructions</th></tr></thead><tbody>${rows || '<tr><td colspan="6">No medicines prescribed.</td></tr>'}</tbody></table>
+      ${rxSectionVisibility.labs ? section('Investigations',val('order-investigations')) : ''}
+      ${rxSectionVisibility.advice ? section('Advice',val('order-advice')) : ''}
+      ${section('Follow-up',val('order-followup-date') ? new Date(val('order-followup-date')+'T00:00:00').toLocaleDateString('en-IN',{dateStyle:'medium'}) : '')}
+      ${stationeryMode === 'letterhead' ? '' : `<div class="signature"><div>Doctor’s signature / seal</div><p>${e(clinicConfig.docName)}</p><p>${e(clinicConfig.docReg)}</p></div>`}<footer>Created with Arogya</footer></div></body></html>`;
+    }
+
+    function validatePrescription() {
+      if (!document.getElementById('patient-name').value.trim()) {
+        showToast('Enter the patient name before exporting.', 'error');
+        return false;
+      }
+      if (!clinicConfig.docName || !clinicConfig.docReg || !clinicConfig.clinicName) {
+        showToast('Add your clinic, doctor name and registration number in settings.', 'error');
+        openClinicSettingsModal();
+        return false;
+      }
+      return true;
+    }
+
+    function prescriptionFilename() {
+      const name = document.getElementById('patient-name').value.trim().replace(/[^\p{L}\p{N}_-]/gu,'_').slice(0,60) || 'Patient';
+      return `Prescription_${name}_${new Date().toLocaleDateString('en-CA')}.pdf`;
+    }
+
+    function printPrescription() {
+      if (!validatePrescription()) return;
+      const html = prescriptionDocument();
+      if (window.AndroidNative && typeof AndroidNative.printPrescriptionHtml === 'function') {
+        AndroidNative.printPrescriptionHtml(html);
+        return;
+      }
+      // A separate document avoids hidden ancestors and app navigation in the printout.
+      const frame = document.createElement('iframe');
+      frame.style.cssText='position:fixed;width:800px;height:1px;left:-10000px;top:0;border:0';
+      frame.onload=async () => {
+        await frame.contentDocument.fonts.ready;
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      };
+      document.querySelectorAll('iframe[data-print]').forEach(f=>f.remove());
+      frame.dataset.print='true';
+      frame.srcdoc=html;
+      document.body.appendChild(frame);
+    }
+
+    async function downloadPrescriptionPDF() {
+      if (!validatePrescription()) return;
+      const html = prescriptionDocument();
+      if (typeof html2pdf !== 'function') {
+        showToast('PDF library unavailable. Use Print and choose Save as PDF.', 'error');
+        return;
+      }
+      const frame=document.createElement('iframe');
+      frame.style.cssText='position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0';
+      document.body.appendChild(frame);
+      try {
+        showToast('Preparing PDF…','info');
+        await new Promise(resolve=>{frame.onload=resolve;frame.srcdoc=html;});
+        await frame.contentDocument.fonts.ready;
+        const scopedStyle = frame.contentDocument.createElement('style');
+        scopedStyle.textContent = frame.contentDocument.querySelector('style').textContent;
+        const sheet = frame.contentDocument.getElementById('pdf-document');
+        sheet.prepend(scopedStyle);
+        const worker = html2pdf().set({margin:14,filename:prescriptionFilename(),image:{type:'jpeg',quality:.98},html2canvas:{scale:2,windowWidth:794,scrollX:0,scrollY:0},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy']}}).from(sheet);
+        if (window.AndroidNative && typeof AndroidNative.savePrescriptionPdf === 'function') {
+          const data = await worker.outputPdf('datauristring');
+          AndroidNative.savePrescriptionPdf(data,prescriptionFilename());
+        } else {
+          await worker.save();
+          showToast('PDF created. Check your downloads.','success');
+        }
+      } catch(error) {
+        showToast('PDF could not be created. Use Print and choose Save as PDF.','error');
+      } finally {frame.remove();}
+    }
+
+    // --- 13. WHATSAPP DIRECT DISPATCH ---
+    function sendViaWhatsApp() {
+      syncPrescriptionPreview();
+      const mobile = document.getElementById('patient-mobile').value.trim().replace(/[^0-9]/g, '');
+      const patientName = document.getElementById('patient-name').value.trim() || 'Patient';
+      const diagnosis = document.getElementById('clinical-summary').value.trim() || 'Medical Consultation';
+      const followup = document.getElementById('rx-preview-followup-date').innerText;
+      const langData = TRANSLATIONS[currentPatientLang] || TRANSLATIONS['en'];
+
+      if (mobile.length !== 10) {
+        showToast('Please enter a valid 10-digit mobile number to send WhatsApp message', 'error');
+        return;
+      }
+
+      let medSummary = prescriptionCart.map((m, i) => {
+        const timingTrans = langData.timing[m.timing] ? ` (${langData.timing[m.timing]})` : '';
+        const whenTrans = langData.when[m.when] ? ` [${langData.when[m.when]}]` : '';
+        return `${i+1}. *${m.brand}* (${m.dose}) - ${m.timing}${timingTrans}${whenTrans} for ${m.duration}`;
+      }).join('\n');
+
+      if (!medSummary) medSummary = "No oral medications prescribed.";
+
+      const message = `Namaste *${patientName}*,\n\nHere is your digital prescription summary from *${clinicConfig.docName}* at *${clinicConfig.clinicName}*:\n\n*Diagnosis:* ${diagnosis}\n\n*Medications Prescribed:*\n${medSummary}\n\n*Review / Follow-up:* ${followup}\n\n_For any queries or emergency, contact the clinic at ${clinicConfig.clinicContact}._\n_Wishing you a speedy recovery!_`;
+
+      const encodedMsg = encodeURIComponent(message);
+      const waUrl = `https://wa.me/91${mobile}?text=${encodedMsg}`;
+      if (window.AndroidNative) {
+        window.location.href = waUrl;
+      } else {
+        window.open(waUrl, '_blank');
+      }
+      showToast('Opening WhatsApp dispatch window...', 'success');
+    }
+
+    // --- 14. ENCOUNTER ARCHIVE ---
+    function saveCurrentEncounter() {
+      const mobile = document.getElementById('patient-mobile').value.trim().replace(/[^0-9]/g, '');
+      const name = document.getElementById('patient-name').value.trim();
+
+      if (mobile.length !== 10 || !name) {
+        showToast('Patient mobile number and name are required to save encounter', 'error');
+        return;
+      }
+
+      if (prescriptionCart.length === 0) {
+        if (!confirm('Cart is currently empty. Save encounter without medications?')) {
+          return;
+        }
+      }
+
+      if (!patientDatabase[mobile]) {
+        patientDatabase[mobile] = {
+          name: name,
+          age: document.getElementById('patient-age').value.trim(),
+          sex: document.getElementById('patient-sex').value,
+          occupation: document.getElementById('patient-occupation').value.trim(),
+          address: document.getElementById('patient-address').value.trim(),
+          familyHistory: document.getElementById('clinical-family-history').value.trim(),
+          drugHistory: document.getElementById('clinical-drug-history').value.trim(),
+          visits: []
+        };
+      } else {
+        patientDatabase[mobile].name = name;
+        patientDatabase[mobile].age = document.getElementById('patient-age').value.trim();
+        patientDatabase[mobile].sex = document.getElementById('patient-sex').value;
+        patientDatabase[mobile].occupation = document.getElementById('patient-occupation').value.trim();
+        patientDatabase[mobile].address = document.getElementById('patient-address').value.trim();
+        patientDatabase[mobile].familyHistory = document.getElementById('clinical-family-history').value.trim();
+        patientDatabase[mobile].drugHistory = document.getElementById('clinical-drug-history').value.trim();
+      }
+
+      const encounter = {
+        id: 'enc_' + Date.now(),
+        date: new Date().toISOString().slice(0, 10),
+        time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+        chiefComplaints: document.getElementById('clinical-chief-complaints').value.trim(),
+        asooComplaints: document.getElementById('clinical-asoo-complaints').value.trim(),
+        history: document.getElementById('clinical-history').value.trim(),
+        diagnosis: document.getElementById('clinical-summary').value.trim() || 'General Consultation',
+        vitals: {
+          bp: document.getElementById('vitals-bp').value.trim(),
+          pulse: document.getElementById('vitals-pulse').value.trim(),
+          temp: document.getElementById('vitals-temp').value.trim(),
+          spo2: document.getElementById('vitals-spo2').value.trim(),
+          wt: document.getElementById('vitals-weight').value.trim()
+        },
+        medications: [...prescriptionCart],
+        investigations: document.getElementById('order-investigations').value.trim(),
+        advice: document.getElementById('order-advice').value.trim(),
+        followup: document.getElementById('order-followup-date').value
+      };
+
+      patientDatabase[mobile].visits.unshift(encounter);
+      if (!savePatientsToStorage()) return;
+      renderArchiveList();
+      showToast(`Encounter successfully saved for ${name} (+91-${mobile})`, 'success');
+    }
+
+    function renderArchiveList() {
+      const container = document.getElementById('archive-list-container');
+      const filter = (document.getElementById('archive-filter-input').value || '').toLowerCase().trim();
+
+      const mobiles = Object.keys(patientDatabase);
+      if (mobiles.length === 0) {
+        container.innerHTML = `<div class="py-12 text-center text-slate-400 text-sm">No saved patient encounters yet.</div>`;
+        return;
+      }
+
+      let html = '';
+      mobiles.forEach(mob => {
+        const p = patientDatabase[mob];
+        if (filter && !mob.includes(filter) && !p.name.toLowerCase().includes(filter)) {
+          return;
+        }
+
+        const visitCount = p.visits ? p.visits.length : 0;
+        const lastVisit = p.visits && p.visits[0] ? p.visits[0].date : 'No visits';
+        const lastDiag = p.visits && p.visits[0] ? p.visits[0].diagnosis : '--';
+
+        html += `
+          <div class="p-4 rounded-xl border border-slate-200 hover:border-blue-300 bg-white transition space-y-2">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-sm">
+                  ${p.name.charAt(0)}
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="font-bold text-slate-900 text-sm">${p.name}</span>
+                    <span class="text-xs text-slate-500 font-medium">(${p.age} Y / ${p.sex})</span>
+                  </div>
+                  <div class="text-xs text-blue-700 font-mono font-medium">+91 ${mob} • ${p.occupation || 'N/A'}</div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button onclick="loadPatientFromArchive('${mob}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-folder-open"></i> Load into Encounter
+                </button>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between text-xs text-slate-500 gap-2">
+              <div>
+                <span class="font-semibold text-slate-700">Latest Assessment:</span> ${lastDiag}
+              </div>
+              <div class="flex items-center gap-3">
+                <span>Total Encounters: <strong class="text-slate-800">${visitCount}</strong></span>
+                <span>Last Encounter: <strong class="text-slate-800">${lastVisit}</strong></span>
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html || `<div class="py-8 text-center text-slate-400 text-xs">No records matched "${escapeHTML(filter)}".</div>`;
+    }
+
+    function loadPatientFromArchive(mobile) {
+      document.getElementById('patient-mobile').value = mobile;
+      lookupPatientByMobile();
+      switchTab('consultation');
+    }
+
+    // --- 15. CUSTOM MEDICINE MODAL & SETTINGS ---
+    function openCustomMedModal() {
+      document.getElementById('custom-med-modal').classList.remove('hidden');
+    }
+    function closeCustomMedModal() {
+      document.getElementById('custom-med-modal').classList.add('hidden');
+    }
+    function saveCustomMedicine() {
+      const brand = document.getElementById('new-med-brand').value.trim();
+      const generic = document.getElementById('new-med-generic').value.trim();
+      const form = document.getElementById('new-med-form').value;
+      const cat = document.getElementById('new-med-cat').value;
+      const dose = document.getElementById('new-med-dose').value.trim() || '1 Tablet';
+      const timing = document.getElementById('new-med-timing').value;
+
+      if (!brand || !generic) {
+        showToast('Brand name and generic composition are required', 'error');
+        return;
+      }
+
+      const newDrug = {
+        id: 'custom-' + Date.now(),
+        brand: brand,
+        generic: generic,
+        form: form,
+        cat: cat,
+        defaultDose: dose,
+        defaultTiming: timing,
+        defaultWhen: 'After Food (PC)',
+        defaultDuration: '5 Days',
+        instructions: ''
+      };
+
+      medicineCatalog.unshift(newDrug);
+      try {
+        localStorage.setItem('arogya_catalog_v3', JSON.stringify(medicineCatalog));
+      } catch (e) {}
+
+      renderMedicineCatalog();
+      closeCustomMedModal();
+      showToast(`Added ${brand} to Clinic Formulary`, 'success');
+
+      document.getElementById('new-med-brand').value = '';
+      document.getElementById('new-med-generic').value = '';
+    }
+
+    function openClinicSettingsModal() {
+      document.getElementById('cfg-doc-name').value = clinicConfig.docName;
+      document.getElementById('cfg-doc-degree').value = clinicConfig.docDegree;
+      document.getElementById('cfg-doc-reg').value = clinicConfig.docReg;
+      document.getElementById('cfg-clinic-name').value = clinicConfig.clinicName;
+      document.getElementById('cfg-clinic-tagline').value = clinicConfig.clinicTagline;
+      document.getElementById('cfg-clinic-address').value = clinicConfig.clinicAddress;
+      document.getElementById('cfg-clinic-contact').value = clinicConfig.clinicContact;
+      document.getElementById('clinic-settings-modal').classList.remove('hidden');
+    }
+
+    function closeClinicSettingsModal() {
+      document.getElementById('clinic-settings-modal').classList.add('hidden');
+    }
+
+    function saveClinicSettings() {
+      clinicConfig.docName = document.getElementById('cfg-doc-name').value.trim() || '';
+      clinicConfig.docDegree = document.getElementById('cfg-doc-degree').value.trim() || '';
+      clinicConfig.docReg = document.getElementById('cfg-doc-reg').value.trim() || '';
+      clinicConfig.clinicName = document.getElementById('cfg-clinic-name').value.trim() || '';
+      clinicConfig.clinicTagline = document.getElementById('cfg-clinic-tagline').value.trim() || '';
+      clinicConfig.clinicAddress = document.getElementById('cfg-clinic-address').value.trim() || '';
+      clinicConfig.clinicContact = document.getElementById('cfg-clinic-contact').value.trim() || '';
+
+      try {
+        localStorage.setItem('arogya_clinic_config', JSON.stringify(clinicConfig));
+      } catch (e) {}
+
+      applyClinicConfigToUI();
+      closeClinicSettingsModal();
+      showToast('Clinic & Doctor profile updated!', 'success');
+    }
+
+    function applyClinicConfigToUI() {
+      document.getElementById('header-doc-name').innerText = clinicConfig.docName || 'Clinic settings';
+      document.getElementById('header-doc-reg').innerText = clinicConfig.docReg ? `${clinicConfig.docReg ? 'Reg: '+clinicConfig.docReg : ''}` : '';
+      syncPrescriptionPreview();
+    }
+
+    
+    // --- KEYBOARD SHORTCUTS LISTENER ---
+    window.addEventListener('keydown', (e) => {
+      // Ctrl + K -> search medicines / presets
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        switchTab('pharmacy');
+        setTimeout(() => {
+          const input = document.getElementById('med-search-input');
+          if (input) { input.focus(); input.select(); }
+        }, 100);
+      }
+      // Ctrl + Enter -> Jump to Rx Preview
+      else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        switchTab('preview');
+      }
+      // Ctrl + S -> Save Encounter
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        saveCurrentEncounter();
+      }
+      // Alt + 1, Alt + 2, Alt + 3
+      else if (e.altKey && e.key === '1') {
+        e.preventDefault();
+        switchTab('consultation');
+      }
+      else if (e.altKey && e.key === '2') {
+        e.preventDefault();
+        switchTab('pharmacy');
+      }
+      else if (e.altKey && e.key === '3') {
+        e.preventDefault();
+        switchTab('preview');
+      }
+      // Escape -> close modals
+      else if (e.key === 'Escape') {
+        closeShortcutsModal();
+        closeSavePresetModal();
+        closeCustomMedModal();
+        closeClinicSettingsModal();
+      }
+      // '?' -> open shortcuts modal
+      else if (e.key === '?' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+        e.preventDefault();
+        openShortcutsModal();
+      }
+    });
+
+    function openShortcutsModal() {
+      document.getElementById('shortcuts-modal').classList.remove('hidden');
+    }
+    function closeShortcutsModal() {
+      document.getElementById('shortcuts-modal').classList.add('hidden');
+    }
+
+    // --- PEDIATRIC DOSING HELPER ---
+    document.getElementById('patient-age').addEventListener('input', checkPediatricAge);
+    document.getElementById('vitals-weight').addEventListener('input', checkPediatricAge);
+
+    function checkPediatricAge() {
+      const age = parseFloat(document.getElementById('patient-age').value);
+      const wt = parseFloat(document.getElementById('vitals-weight').value);
+      const banner = document.getElementById('pediatric-banner');
+      const text = document.getElementById('pediatric-dose-text');
+
+      if (!isNaN(age) && age < 12) {
+        banner.classList.remove('hidden');
+        if (!isNaN(wt) && wt > 0) {
+          const paracetamolMg = Math.round(wt * 15);
+          const syp120ml = (paracetamolMg / 24).toFixed(1); // 120mg/5ml = 24mg/ml
+          const syp250ml = (paracetamolMg / 50).toFixed(1); // 250mg/5ml = 50mg/ml
+          text.innerHTML = `<strong>Weight: ${wt} kg</strong> &bull; Calculated Paracetamol: <strong>${paracetamolMg} mg per dose</strong> (approx. <strong>${syp250ml} ml</strong> of 250mg/5ml syrup, or <strong>${syp120ml} ml</strong> of 120mg/5ml syrup).`;
+        } else {
+          text.innerHTML = 'Paracetamol recommended pediatric dose: <strong>15 mg/kg per dose</strong>. Enter weight above for exact syrup dosage volume.';
+        }
+      } else {
+        banner.classList.add('hidden');
+      }
+    }
+
+    function loadPediatricFormulary() {
+      switchTab('pharmacy');
+      document.getElementById('med-search-input').value = 'syrup';
+      filterMedicines();
+    }
+
+    // --- PRESCRIPTION SECTION TOGGLES ---
+    let rxSectionVisibility = { vitals: true, chief: true, diag: true, labs: true, advice: true };
+
+    function toggleRxSection(section, isVisible) {
+      rxSectionVisibility[section] = isVisible;
+      syncPrescriptionPreview();
+    }
+
+    // --- DATA BACKUP, RESTORE & CSV EXPORT ---
+    function backupClinicData() {
+      const backupObj = {
+        app: 'ArogyaEHR',
+        version: '3.0',
+        exportDate: new Date().toISOString(),
+        patients: patientDatabase,
+        customPresets: customPresets,
+        clinicConfig: clinicConfig
+      };
+
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupObj, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `ArogyaEHR_Backup_${new Date().toISOString().slice(0,10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+
+      showToast('Clinic backup successfully downloaded as JSON!', 'success');
+    }
+
+    function restoreClinicData(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (data.patients) {
+            patientDatabase = { ...patientDatabase, ...data.patients };
+            savePatientsToStorage();
+          }
+          if (data.customPresets) {
+            customPresets = data.customPresets;
+            localStorage.setItem('arogya_custom_presets_v3', JSON.stringify(customPresets));
+          }
+          if (data.clinicConfig) {
+            clinicConfig = data.clinicConfig;
+            localStorage.setItem('arogya_clinic_config', JSON.stringify(clinicConfig));
+            applyClinicConfigToUI();
+          }
+          renderPresets();
+          renderArchiveList();
+          showToast('Clinic records successfully restored from backup!', 'success');
+        } catch (err) {
+          showToast('Invalid backup file format.', 'error');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function exportEncountersCSV() {
+      const rows = [
+        ['Date', 'Mobile', 'Patient Name', 'Age', 'Sex', 'Occupation', 'Diagnosis', 'Prescription Medicines', 'Investigations', 'Followup Date']
+      ];
+
+      Object.keys(patientDatabase).forEach(mob => {
+        const p = patientDatabase[mob];
+        (p.visits || []).forEach(v => {
+          const medsStr = (v.medications || []).map(m => `${m.brand} (${m.timing}, ${m.duration})`).join('; ');
+          rows.push([
+            v.date || '',
+            mob,
+            `"${p.name || ''}"`,
+            p.age || '',
+            p.sex || '',
+            `"${p.occupation || ''}"`,
+            `"${v.diagnosis || ''}"`,
+            `"${medsStr}"`,
+            `"${v.investigations || ''}"`,
+            v.followup || ''
+          ]);
+        });
+      });
+
+      const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Arogya_Patients_Report_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      showToast('Patient log exported to Excel CSV!', 'success');
+    }
+
+
+    // --- 16. TOAST NOTIFICATION UTILITY ---
+    function showToast(message, type = 'info') {
+      const toast = document.getElementById('toast');
+      const msg = document.getElementById('toast-message');
+      const icon = document.getElementById('toast-icon');
+
+      msg.innerText = message;
+      toast.className = 'fixed bottom-6 right-6 z-50 max-w-sm px-4 py-3 rounded-2xl shadow-xl border text-sm font-medium transition-all transform duration-300 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5';
+
+      if (type === 'success') {
+        toast.classList.add('bg-emerald-900', 'text-white', 'border-emerald-700');
+        icon.className = 'fa-solid fa-circle-check text-emerald-400';
+      } else if (type === 'error') {
+        toast.classList.add('bg-rose-900', 'text-white', 'border-rose-700');
+        icon.className = 'fa-solid fa-triangle-exclamation text-rose-400';
+      } else if (type === 'warning') {
+        toast.classList.add('bg-amber-900', 'text-white', 'border-amber-700');
+        icon.className = 'fa-solid fa-circle-exclamation text-amber-400';
+      } else {
+        toast.classList.add('bg-slate-900', 'text-white', 'border-slate-700');
+        icon.className = 'fa-solid fa-circle-info text-blue-400';
+      }
+
+      toast.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 3500);
+    }
+  </script>
+
+  <!-- Service Worker Registration for Offline & WebAPK -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then((reg) => console.log('ServiceWorker registered:', reg.scope))
+          .catch((err) => console.log('ServiceWorker registration failed:', err));
+      });
+    }
+  </script>
+<script src="records.js"></script>
+</body>
+</html>
